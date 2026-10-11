@@ -30,11 +30,16 @@ struct PostRow: Identifiable, Hashable {
 /// handleEvent.
 @MainActor
 final class ThreadlyStore: ObservableObject {
+    struct ForumCategory: Hashable {
+        let name: String
+        let color: Color?
+    }
+
     @Published var topics: [TopicRow] = []
     @Published var loadingTopics = false
     @Published var searchResults: [TopicRow] = []
     @Published var searching = false
-    @Published var categories: [Int: String] = [:]
+    @Published var categories: [Int: ForumCategory] = [:]
     @Published var selectedTopic: TopicRow?
     @Published var posts: [PostRow] = []
     @Published var loadingPosts = false
@@ -89,9 +94,13 @@ final class ThreadlyStore: ObservableObject {
         guard let api else { return }
         do {
             let rows = try await api.categories_list()
-            var map: [Int: String] = [:]
+            var map: [Int: ForumCategory] = [:]
+            // category row = (id name slug color)
             for row in rows where row.count >= 2 {
-                map[Int(row[0]) ?? -1] = row[1]
+                map[Int(row[0]) ?? -1] = ForumCategory(
+                    name: row[1],
+                    color: Color(forumHex: row.count > 3 ? row[3] : "")
+                )
             }
             categories = map
         } catch {
@@ -172,6 +181,10 @@ final class ThreadlyStore: ObservableObject {
     }
 
     func categoryName(_ id: Int) -> String {
-        categories[id] ?? (id == 0 ? "" : "Category \(id)")
+        categories[id]?.name ?? (id == 0 ? "" : "Category \(id)")
+    }
+
+    func categoryColor(_ id: Int) -> Color? {
+        categories[id]?.color
     }
 }

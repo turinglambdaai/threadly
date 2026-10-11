@@ -53,6 +53,43 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Shared bits
+
+/// Discourse-authentic category chip: the forum's own color as tint.
+private struct CategoryChip: View {
+    let name: String
+    let color: Color?
+
+    var body: some View {
+        Text(name)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(color ?? Color.secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background((color ?? Color.secondary).opacity(0.14), in: Capsule())
+    }
+}
+
+/// Compact icon+number count row (SF Symbols, secondary color).
+private struct CountStrip: View {
+    let counts: [(symbol: String, value: Int)]
+
+    var body: some View {
+        HStack(spacing: 9) {
+            ForEach(counts, id: \.symbol) { count in
+                HStack(spacing: 3) {
+                    Image(systemName: count.symbol)
+                    Text("\(count.value)")
+                }
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .imageScale(.small)
+        .monospacedDigit()
+    }
+}
+
 // MARK: - Sidebar
 
 private struct SidebarView: View {
@@ -64,7 +101,7 @@ private struct SidebarView: View {
             if store.isSearchActive {
                 Section {
                     ForEach(store.displayTopics) { topic in
-                        TopicListRow(topic: topic, store: store)
+                        TopicListRow(topic: topic, searchResult: true)
                             .tag(topic.id)
                     }
                 } header: {
@@ -82,7 +119,7 @@ private struct SidebarView: View {
             } else {
                 Section("Latest") {
                     ForEach(store.displayTopics) { topic in
-                        TopicListRow(topic: topic, store: store)
+                        TopicListRow(topic: topic, searchResult: false)
                             .tag(topic.id)
                     }
                 }
@@ -131,33 +168,50 @@ private struct SidebarView: View {
 }
 
 private struct TopicListRow: View {
+    @EnvironmentObject private var store: ThreadlyStore
     let topic: TopicRow
-    let store: ThreadlyStore
+    let searchResult: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(topic.title)
                 .font(.body.weight(.medium))
                 .lineLimit(2)
-            HStack(spacing: 6) {
-                let category = store.categoryName(topic.categoryId)
-                if category.isEmpty == false {
-                    Text(category)
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(DesignTokens.accentSoft, in: RoundedRectangle(cornerRadius: 4))
-                }
-                Text("\(topic.replyCount) replies")
-                Text("\(topic.views) views")
-                if topic.likeCount > 0 {
-                    Label("\(topic.likeCount)", systemImage: "heart")
+            HStack(spacing: 8) {
+                if searchResult {
+                    // search rows carry dates, not category ids
+                    Text(Self.shortDate(topic.lastPosted))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    CountStrip(counts: [
+                        (symbol: "bubble.right", value: topic.postsCount)
+                    ])
+                } else {
+                    let category = store.categoryName(topic.categoryId)
+                    if category.isEmpty == false {
+                        CategoryChip(
+                            name: category,
+                            color: store.categoryColor(topic.categoryId)
+                        )
+                    }
+                    CountStrip(counts: [
+                        (symbol: "bubble.right", value: topic.replyCount),
+                        (symbol: "eye", value: topic.views),
+                        (symbol: "heart", value: topic.likeCount)
+                    ])
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+
+    private static func shortDate(_ iso: String) -> String {
+        guard !iso.isEmpty else { return "" }
+        let formatter = ThreadWebView.displayFormatter
+        if let date = ThreadWebView.isoFormatter.date(from: iso) {
+            return formatter.string(from: date)
+        }
+        return iso
     }
 }
 
@@ -199,21 +253,23 @@ private struct DetailView: View {
 
     private func topicDetail(_ topic: TopicRow) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(topic.title)
                     .font(.title2.weight(.semibold))
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     let category = store.categoryName(topic.categoryId)
                     if category.isEmpty == false {
-                        Text(category)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(DesignTokens.accentSoft, in: RoundedRectangle(cornerRadius: 4))
+                        CategoryChip(
+                            name: category,
+                            color: store.categoryColor(topic.categoryId)
+                        )
                     }
-                    Text("\(topic.postsCount) posts · \(topic.views) views · \(topic.likeCount) likes")
+                    CountStrip(counts: [
+                        (symbol: "bubble.right", value: topic.postsCount),
+                        (symbol: "eye", value: topic.views),
+                        (symbol: "heart", value: topic.likeCount)
+                    ])
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
             .padding()
             Divider()
@@ -286,16 +342,20 @@ struct ThreadWebView: NSViewRepresentable {
 
     /// The forum's cooked HTML is already sanitized server-side; this only
     /// escapes the surrounding metadata and wraps everything in a reader
-    /// stylesheet that follows the system appearance.
+    /// stylesheet that follows the system appearance. A 680px column keeps
+    /// long paragraphs readable; avatars give each post a face.
     static func document(title: String, posts: [PostRow]) -> String {
         let body = posts.map { post -> String in
+            let avatar = post.avatarURL.isEmpty
+                ? ""
+                : "<img class=\"avatar\" src=\"\(escape(post.avatarURL))\" onerror=\"this.style.display='none'\">"
             let meta = """
-            <div class="meta">
-              <span class="author">\(escape(post.author))</span>
-              <span class="dot">·</span>
-              <span>#\(post.number)</span>
-              <span class="dot">·</span>
-              <span class="date">\(escape(formatDate(post.createdAt)))</span>
+            <div class="meta">\(avatar)\
+            <span class="author">\(escape(post.author))</span>\
+            <span class="dot">·</span>\
+            <span>#\(post.number)</span>\
+            <span class="dot">·</span>\
+            <span class="date">\(escape(formatDate(post.createdAt)))</span>
             </div>
             """
             return "<section class=\"post\">\(meta)\(post.html)</section>"
@@ -307,18 +367,27 @@ struct ThreadWebView: NSViewRepresentable {
         :root { color-scheme: light dark; }
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-          font-size: 15px; line-height: 1.55;
-          margin: 0; padding: 20px 28px 40px;
+          font-size: 15px; line-height: 1.6;
+          margin: 0 auto; padding: 22px 28px 48px;
+          max-width: 680px;
           background: transparent;
         }
         .post {
-          padding: 14px 0 6px;
-          border-bottom: 1px solid rgba(128,128,128,.22);
+          padding: 16px 0 8px;
+          border-bottom: 1px solid rgba(128,128,128,.2);
         }
         .post:first-child { padding-top: 0; }
-        .meta { font-size: 12px; color: rgba(128,128,128,.9); margin-bottom: 6px; }
+        .meta {
+          display: flex; align-items: center; gap: 7px;
+          font-size: 12px; color: rgba(128,128,128,.95);
+          margin-bottom: 8px;
+        }
+        .avatar {
+          width: 26px; height: 26px; border-radius: 50%;
+          margin-right: 2px;
+        }
         .meta .author { font-weight: 600; color: #C15F3C; }
-        .meta .dot { opacity: .5; }
+        .meta .dot { opacity: .45; }
         h1,h2,h3 { line-height: 1.3; }
         pre, code {
           font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -354,7 +423,7 @@ struct ThreadWebView: NSViewRepresentable {
             .replacingOccurrences(of: ">", with: "&gt;")
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
+    static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
@@ -362,7 +431,7 @@ struct ThreadWebView: NSViewRepresentable {
 
     private static let fallbackFormatter = ISO8601DateFormatter()
 
-    private static let displayFormatter: DateFormatter = {
+    static let displayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
         f.timeStyle = .short

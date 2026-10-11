@@ -14,5 +14,13 @@ All notable changes to Threadly are documented here. Format follows
   a global `--json` flag; `doctor` and `version` never touch the network.
 - macOS SwiftUI shell (Rivet host): sidebar topic browser, thread reader,
   archive search.
+- App icon (family terracotta palette, thread staircase mark) for the
+  macOS and Windows bundles; `THREADLY_APPEARANCE=dark|light` pins the
+  appearance for dual-theme verification.
 - CI: engine tests on ubuntu/macos/windows plus a macOS host package gate;
   release pipeline shipping macOS DMG (arm64/x64) with a signed update feed.
+
+### Changed
+- Category chips render the forum's own category colors; topic counts use
+  SF Symbols; the thread reader renders post avatars and constrains text
+  to a 680px reading column.

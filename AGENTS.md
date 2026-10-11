@@ -58,6 +58,10 @@ Rivet 工作约定:开发前 pull `~/Codes/rivet`,pull 后清 `compiled/` 再
 `raco setup`;生成 GeneratedBackend.swift 前核对 rivet pin;发布构建切
 pin、开发跟最新。
 
+**颜值第一生产力(用户 2026-10-11 定调)**:界面必须优雅美观,按苹果的
+设计做。壳相关改动的完成定义=亮暗双模式实机截图验收;不达标的 UI 等于
+没做。图标改版走 `scripts/make-icons.py`,禁止手改生成物。
+
 ## 版本与发布
 
 - VERSION == rivet.rktd version == app/version.rkt,由
@@ -72,4 +76,17 @@ pin、开发跟最新。
 
 ## 坑(已踩过)
 
-(待积累)
+- **壳的观察断链**:`@EnvironmentObject model` + `model.store.*` 时,store
+  的 `@Published` 变化不触发视图重渲染(PodLens 同款隐患)。必须
+  `.environmentObject(model.store)` 单独注入,视图直接声明
+  `@EnvironmentObject store`。
+- **`raco rivet build` 缓存(上游 #129 同款)**:改 Swift 后
+  `raco rivet package` 可能不重编壳、打包出旧二进制。验收/发版前先
+  `raco rivet clean` 再 package;拿 `strings` 核对新符号真在二进制里。
+- **WKWebView 亮暗跟随**:prefers-color-scheme 读的是
+  `NSApp.effectiveAppearance`,`preferredColorScheme` 在 macOS 不可靠;
+  亮暗双验证用 `THREADLY_APPEARANCE=dark|light` 环境变量(勿改用户全局
+  系统外观)。
+- **GUI 自动化**:cliclick 点击前必须先 AXRaise + frontmost,否则点到
+  前台窗口;截被遮挡窗口用 `screencapture -l <CGWindowID>`
+  (CGWindowListCopyWindowInfo 查 id)。

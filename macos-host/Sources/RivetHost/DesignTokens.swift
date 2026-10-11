@@ -16,3 +16,18 @@ enum DesignTokens {
         return NSColor(red: 0xF7 / 255.0, green: 0xE5 / 255.0, blue: 0xDD / 255.0, alpha: 1)
     })
 }
+
+extension Color {
+    /// Forum category colors arrive as bare 6-digit hex strings ("0088CC").
+    init?(forumHex: String) {
+        guard forumHex.count == 6, let value = UInt32(forumHex, radix: 16) else {
+            return nil
+        }
+        self.init(
+            .sRGB,
+            red: Double((value >> 16) & 0xFF) / 255.0,
+            green: Double((value >> 8) & 0xFF) / 255.0,
+            blue: Double(value & 0xFF) / 255.0
+        )
+    }
+}

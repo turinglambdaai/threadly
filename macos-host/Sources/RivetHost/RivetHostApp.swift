@@ -23,6 +23,7 @@ struct ThreadlyApp: App {
             }
         }
         .windowStyle(.automatic)
+        .windowToolbarStyle(.unified)
     }
 }
 
@@ -36,6 +37,17 @@ final class AppModel: ObservableObject {
 
     func start() {
         guard backend == nil else { return }
+
+        // THREADLY_APPEARANCE=dark|light pins the appearance for dual-theme
+        // verification (the family bar: every UI change proves both modes);
+        // unset follows the system. NSApp.appearance, not
+        // preferredColorScheme — WKWebView reads the app appearance.
+        switch ProcessInfo.processInfo.environment["THREADLY_APPEARANCE"] {
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        default: break
+        }
+
         do {
             let config = try Self.runtimeConfiguration()
             let backend = EmbeddedRacketBackend(configuration: config)
