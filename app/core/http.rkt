@@ -1,0 +1,100 @@
+#lang racket/base
+
+;; Minimal HTTP(S) client over net/http-client. Redirects are followed
+;; manually — up to 5 hops, preserving the User-Agent on every hop —
+;; because the Discourse CDN hands out 301/302s and the default client
+;; would otherwise surface the redirect page as the body.
+
+(require net/http-client
+         racket/format
+         racket/list
+         racket/port
+         racket/string
+         "../version.rkt")
+
+(provide http-user-agent
+         split-url
+         status-code
+         header-value
+         headers->strings
+         http-get-bytes
+         http-get-string)
+
+(define http-user-agent
+  (format "Threadly/~a (+https://github.com/turinglambdaai/threadly)" app-version))
+
+;; ---- URL splitting (no net/url dependency; forum URLs are plain https) ----
+
+;; → (values ssl? host port path)
+(define (split-url u)
+  (define m
+    (regexp-match #rx"^https?://([^/:?#]+)(:([0-9]+))?(/[^?#]*)?(\\?.*)?$" u))
+  (unless m
+    (raise-argument-error 'split-url "absolute http(s) URL" u))
+  (define ssl? (string-prefix? u "https://"))
+  (define host (list-ref m 1))
+  (define port
+    (cond
+      [(list-ref m 3) (string->number (list-ref m 3))]
+      [ssl? 443]
+      [else 80]))
+  (define path
+    (string-append
+     (or (list-ref m 4) "/")
+     (or (list-ref m 5) "")))
+  (values ssl? host port path))
+
+;; ---- request core ----------------------------------------------------------
+
+(define (headers->strings headers)
+  (map (lambda (h) (if (bytes? h) (bytes->string/utf-8 h) h)) headers))
+
+(define (header-value headers name)
+  (define m
+    (findf (lambda (h)
+             (regexp-match (format "(?i:^~a:)" (regexp-quote name)) h))
+           headers))
+  (and m
+       (string-trim
+        (second (regexp-match (format "(?i:^~a:\\s*(.*)$)" (regexp-quote name)) m)))))
+
+;; status line like "HTTP/1.1 200 OK" → 200
+(define (status-code status)
+  (define s (if (bytes? status) (bytes->string/utf-8 status) status))
+  (define m (regexp-match #px"HTTP/[0-9.]+ +([0-9]+)" s))
+  (and m (string->number (second m))))
+
+;; One request, no redirects. → (values status headers body-bytes)
+;; Bodies are read to EOF with Connection: close.
+(define (request-once url-string headers)
+  (define-values (ssl? host port path) (split-url url-string))
+  (define conn
+    (http-conn-open host #:ssl? ssl? #:port port))
+  (define all-headers
+    (append (list (format "User-Agent: ~a" http-user-agent)
+                  "Accept: application/json"
+                  "Connection: close")
+            headers))
+  (define-values (status resp-headers body-port)
+    (http-conn-sendrecv! conn path #:method "GET" #:headers all-headers))
+  (define resp-headers* (headers->strings resp-headers))
+  (define body (port->bytes body-port))
+  (close-input-port body-port)
+  (with-handlers ([exn:fail? void]) (http-conn-close! conn))
+  (values (status-code status) resp-headers* body))
+
+;; GET with up to 5 redirect hops. → (values code headers body-bytes)
+(define (http-get-bytes url-string)
+  (let loop ([url url-string] [hops 0])
+    (define-values (code headers body)
+      (request-once url '()))
+    (if (and (member code '(301 302 303 307 308)) (< hops 5))
+        (let ([location (header-value headers "location")])
+          (unless location
+            (error 'http-get-bytes "redirect without Location from ~a" url))
+          (loop location (add1 hops)))
+        (values code headers body))))
+
+(define (http-get-string url-string)
+  (define-values (code headers body) (http-get-bytes url-string))
+  (values code headers (bytes->string/utf-8 body)))

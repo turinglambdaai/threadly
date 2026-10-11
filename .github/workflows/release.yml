@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check tag matches VERSION, rivet.rktd, app/version.rkt
+        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
+      - name: Check CHANGELOG
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          grep -q "^## $TAG" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $TAG' section"; exit 1; }
+
+  macos:
+    name: macOS build (${{ matrix.arch }})
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+            racket-arch: arm64
+          - arch: x64
+            runner: macos-15-intel
+            racket-arch: x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout Rivet
+        uses: actions/checkout@v4
+        with:
+          repository: turinglambdaai/rivet
+          path: rivet
+      - name: Install Racket (${{ matrix.racket-arch }})
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+          architecture: ${{ matrix.racket-arch }}
+      - name: Link Rivet
+        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
+      - name: Package (ad-hoc; notarization activates when secrets exist)
+        run: raco rivet package
+      - name: Update-feed zip + checksum
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ditto -c -k --keepParent dist/threadly.app \
+            "threadly-${VERSION}-macos-${{ matrix.arch }}.zip"
+          shasum -a 256 "threadly-${VERSION}-macos-${{ matrix.arch }}.zip" \
+            > "threadly-${VERSION}-macos-${{ matrix.arch }}.zip.sha256"
+      - name: Human installer (DMG) + checksum
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          hdiutil create -volname Threadly -srcfolder dist/threadly.app -ov -format UDZO \
+            "threadly-${VERSION}-macos-${{ matrix.arch }}.dmg"
+          shasum -a 256 "threadly-${VERSION}-macos-${{ matrix.arch }}.dmg" \
+            > "threadly-${VERSION}-macos-${{ matrix.arch }}.dmg.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: |
+            threadly-*-macos-*.dmg
+            threadly-*-macos-*.dmg.sha256
+            threadly-*-macos-*.zip
+            threadly-*-macos-*.zip.sha256
+          if-no-files-found: error
+
+  release:
+    name: Sign manifest + publish
+    needs: [macos]
+    runs-on: macos-latest
+    env:
+      HAS_UPDATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout Rivet (manifest signer)
+        uses: actions/checkout@v4
+        with:
+          repository: turinglambdaai/rivet
+          path: rivet
+      - name: Install Racket
+        if: env.HAS_UPDATE_KEY == 'true'
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+      - name: Link Rivet (rivet/distribution signs the wrapper)
+        if: env.HAS_UPDATE_KEY == 'true'
+        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
+      - name: Install OpenSSL 3
+        if: env.HAS_UPDATE_KEY == 'true'
+        run: brew install openssl@3
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Flatten artifact dirs
+        run: |
+          find dist -mindepth 2 -maxdepth 2 -type f -exec mv {} dist/ \;
+          find dist -mindepth 1 -maxdepth 1 -type d -empty -delete
+          ls -la dist/
+      - name: Generate + sign update manifest
+        if: env.HAS_UPDATE_KEY == 'true'
+        env:
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+        run: |
+          KEY_FILE=$(mktemp)
+          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
+          bash scripts/make-update-manifest.sh "${{ github.ref_name }}" dist "$KEY_FILE"
+          rm -f "$KEY_FILE"
+        # a release without the update key still ships; clients simply see
+        # no manifest and stay on their version (::warning:: marks it)
+      - name: SHA256SUMS
+        run: |
+          cd dist
+          # strip stray CR from Windows-authored sums before checking
+          cat *.sha256 | tr -d '\r' > SHA256SUMS
+          shasum -a 256 --check SHA256SUMS
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ github.ref_name }}" -R turinglambdaai/threadly >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" dist/* --clobber -R turinglambdaai/threadly
+          else
+            gh release create "${{ github.ref_name }}" dist/* \
+              -R turinglambdaai/threadly \
+              --title "Threadly ${{ github.ref_name }}" \
+              --generate-notes
+          fi
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: dist/*
