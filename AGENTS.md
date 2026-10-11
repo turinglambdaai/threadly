@@ -5,9 +5,11 @@
 ## 这是什么
 
 Threadly 是 Racket 社区论坛(racket.discourse.group,Discourse 架构)的
-桌面客户端:浏览最新主题、读长帖、全文搜索。论坛是 Racket 语言设计讨论
-与生态动态的主场,Threadly 给它一个配得上内容质量的桌面阅读器。技术形态
-遵循 [Rivet](https://github.com/turinglambdaai/rivet) 线:**Racket 引擎 +
+原生客户端:浏览最新主题、读长帖、全文搜索。论坛是 Racket 语言设计讨论
+与生态动态的主场,Threadly 给它一个配得上内容质量的阅读器。**全平台
+产品,与 Taskly 同标:桌面三平台(macOS/Windows/Linux)先行,移动端
+iOS/iPadOS/Android 后期必须落地。**技术形态遵循
+[Rivet](https://github.com/turinglambdaai/rivet) 线:**Racket 引擎 +
 各平台第一方原生 UI**。产品灵魂是**阅读体验**——壳的每一像素都要按这个
 标准做(对标线见 fulcrum 的 Raycast 对标)。
 
@@ -17,6 +19,8 @@ Threadly 是 Racket 社区论坛(racket.discourse.group,Discourse 架构)的
 | CLI | Racket | `app/cli.rkt` | ✅ latest/topic/search/categories/doctor |
 | macOS 壳 | SwiftUI | `macos-host/` | ✅ 首片 |
 | Windows/Linux 壳 | WinUI 3 / GTK4 | (待建) | M1 |
+| Android 壳 | Kotlin(Rivet `platform/android`,Kotlin codegen 已就绪) | (待建) | M4 |
+| iOS/iPadOS 壳 | SwiftUI(Rivet portable Swift 层已跨编译,等其移动交付链 Phase 8) | (待建) | M4 |
 
 ## 硬边界(本仓库存在的合法性根基,任何改动不得越过)
 

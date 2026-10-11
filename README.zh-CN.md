@@ -1,9 +1,9 @@
 # Threadly
 
-Racket 社区论坛的桌面客户端——不开浏览器标签页就能浏览、阅读、全文搜索
+Racket 社区论坛的原生客户端——不开浏览器标签页就能浏览、阅读、全文搜索
 [racket.discourse.group](https://racket.discourse.group)。Racket 的设计讨论、
 提案与生态动态都发生在这个论坛上,Threadly 给这些长技术帖一套配得上内容
-的桌面阅读体验。
+的阅读体验:今天在桌面,接下来是 iOS、iPadOS 和 Android。
 
 [![CI](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Racket](https://img.shields.io/badge/Racket-9.3-9D00FF?logo=racket&logoColor=white)
 
@@ -49,6 +49,8 @@ Threadly 就来做这个桌面客户端,而且按 Racket 社区做事的方式:�
 - [ ] M1 —— Windows 与 Linux 原生壳
 - [ ] M2 —— 登录态:user API key 流、回帖、点赞、通知
 - [ ] M3 —— 阅读增值:帖子摘要、翻译
+- [ ] M4 —— 移动端:Android 壳(Rivet Kotlin 平台)与 iOS/iPadOS 壳
+      (Rivet portable Swift 层),对齐家族全平台标准
 
 ## 从源码构建
 

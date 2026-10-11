@@ -1,10 +1,11 @@
 # Threadly
 
-A native desktop client for the Racket community forum — browse, read, and
+A native client for the Racket community forum — browse, read, and
 search [racket.discourse.group](https://racket.discourse.group) without
 opening a browser tab. The forum is where Racket's design decisions,
 proposals, and ecosystem news actually happen; Threadly gives those long
-technical threads the desktop reading experience they deserve.
+technical threads the reading experience they deserve, on the desktop
+today and on iOS, iPadOS, and Android next.
 
 [![CI](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Racket](https://img.shields.io/badge/Racket-9.3-9D00FF?logo=racket&logoColor=white)
 
@@ -59,6 +60,9 @@ SwiftUI shell.
 - [ ] M1 — Windows and Linux native hosts
 - [ ] M2 — signed-in mode: user API key flow, replies, likes, notifications
 - [ ] M3 — reading value-add: thread summaries, translation
+- [ ] M4 — mobile: Android host (Rivet's Kotlin platform) and iOS/iPadOS
+      host (Rivet's portable Swift layer), matching the family's
+      full-platform scope
 
 ## Build from source
 
