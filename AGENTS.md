@@ -74,6 +74,10 @@ pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生�
   就位(Sync/Keys `secrets.ini` [threadly] 节 + GitHub Secret
   `UPDATE_ED25519_PRIVATE_KEY` PEM 形态;散件即到即收立删)。轮换规则见
   Sync/Keys/AGENTS.md。
+- 产品主页 `site/` → threadly.jrtx.site(Pages workflow 部署,Pages 已
+  启用 workflow 构建型;DNS CNAME 记录由用户添加)。骨架沿用 keepsake
+  站点:双语 i18n 默认中文、共享暖色变量+完整暗色主题、零依赖、系统
+  字体栈(家族规范:禁 Google Fonts)。
 
 ## 坑(已踩过)
 
