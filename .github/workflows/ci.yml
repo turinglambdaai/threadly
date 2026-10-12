@@ -97,7 +97,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build pkg-config \
             libgtk-4-dev libadwaita-1-dev libjson-glib-dev \
-            libsecret-1-dev libglib2.0-dev libwebkit2gtk-4.1-dev \
+            libsecret-1-dev libglib2.0-dev libwebkitgtk-6.0-dev \
             libncurses-dev zlib1g-dev liblz4-dev
       - name: Link Rivet
         run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"

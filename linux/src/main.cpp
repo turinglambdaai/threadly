@@ -6,7 +6,7 @@
 // widgets. A generation counter drops completions from superseded loads
 // (refresh during an in-flight search, topic switch during a slow fetch).
 #include <gtk/gtk.h>
-#include <webkit2/webkit2.h>
+#include <webkit/WebKit.h>
 
 #include <atomic>
 #include <cstdint>
@@ -196,7 +196,7 @@ body {
   margin-bottom: 8px;
 }
 .avatar { width: 26px; height: 26px; border-radius: 50%; margin-right: 2px; }
-.meta .author { font-weight: 600; color: )HTML"} +
+.meta .author { font-weight: 600; color: )HTML" +
          kAccent + R"HTML(; }
 .meta .dot { opacity: .45; }
 h1,h2,h3 { line-height: 1.3; }
@@ -206,11 +206,11 @@ pre { background: rgba(128,128,128,.12); padding: 12px 14px; border-radius: 8px;
 pre code { background: none; padding: 0; }
 blockquote { margin: 8px 0; padding: 2px 14px; border-left: 3px solid rgba(193,95,60,.55); color: rgba(128,128,128,1); }
 img { max-width: 100%; height: auto; border-radius: 6px; }
-a { color: )HTML"} +
+a { color: )HTML" +
          kAccent + R"HTML(; }
 aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding: 6px 12px; background: rgba(128,128,128,.08); border-radius: 6px; }
 </style></head>
-<body>)HTML"} +
+<body>)HTML" +
          body + "</body></html>";
 }
 

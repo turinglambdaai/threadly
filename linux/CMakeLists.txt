@@ -30,9 +30,9 @@ find_package(ZLIB REQUIRED)
 find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET gio-2.0)
-# The reader pane renders the forum's cooked HTML in WebKitGTK
-# (pkg-config name webkit2gtk-4.1 — the libsoup3 ABI).
-pkg_check_modules(WEBKIT REQUIRED IMPORTED_TARGET webkit2gtk-4.1)
+# The reader pane renders the forum's cooked HTML in WebKitGTK — the GTK4
+# build is the webkitgtk-6.0 pkg-config module (libsoup3).
+pkg_check_modules(WEBKIT REQUIRED IMPORTED_TARGET webkitgtk-6.0)
 # The Secret Service adapter is compiled whenever libsecret is present; the
 # capability then reports itself at runtime based on service availability.
 pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
