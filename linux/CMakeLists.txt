@@ -60,6 +60,7 @@ add_executable(RivetHost
   "${RIVET_ROOT}/platform/linux/system/system_services.cpp"
   "${RIVET_ROOT}/platform/linux/system/system_services_internal.cpp"
   "${RIVET_ROOT}/platform/linux/system/crash_shutdown.cpp"
+  "${RIVET_ROOT}/platform/linux/system/global_shortcuts.cpp"
   "${RIVET_ROOT}/platform/linux/system/notifications.cpp"
   "${RIVET_ROOT}/platform/linux/system/tray.cpp"
   "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
