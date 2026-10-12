@@ -2,6 +2,7 @@
 
 #include "pch.h"
 #include "MainWindow.g.h"
+#include "GeneratedBackend.hpp"
 #include "system_services.hpp"
 
 namespace winrt::RivetHost::implementation {
