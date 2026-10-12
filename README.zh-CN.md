@@ -46,11 +46,12 @@ Threadly 就来做这个桌面客户端,而且按 Racket 社区做事的方式:�
 磁盘缓存、终端 CLI、macOS SwiftUI 壳。
 
 - [x] M0 —— Discourse 引擎、磁盘缓存、CLI、macOS SwiftUI 壳
-- [ ] M1 —— Windows 与 Linux 原生壳
+- [x] M1 —— Windows 与 Linux 原生壳
 - [ ] M2 —— 登录态:user API key 流、回帖、点赞、通知
 - [ ] M3 —— 阅读增值:帖子摘要、翻译
 - [ ] M4 —— 移动端:Android 壳(Rivet Kotlin 平台)与 iOS/iPadOS 壳
-      (Rivet portable Swift 层),对齐家族全平台标准
+      (Rivet portable Swift 层),对齐家族全平台标准;watchOS 通知伴机
+      作为 M4 尾段,骑在手机宿主上走 Rivet 的 typed WatchConnectivity 层
 
 ## 从源码构建
 

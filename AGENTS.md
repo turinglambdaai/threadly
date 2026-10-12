@@ -21,6 +21,7 @@ iOS/iPadOS/Android 后期必须落地。**技术形态遵循
 | Windows/Linux 壳 | WinUI 3 / GTK4+WebKitGTK | `windows/` `linux/` | ✅ M1(CI 编译门+launch smoke) |
 | Android 壳 | Kotlin(Rivet `platform/android`,Kotlin codegen 已就绪) | (待建) | M4 |
 | iOS/iPadOS 壳 | SwiftUI(Rivet portable Swift 层已跨编译,等其移动交付链 Phase 8) | (待建) | M4 |
+| watchOS 伴机 | SwiftUI + rivet WatchConnectivity typed companion(表端不嵌引擎) | (待建) | M4 尾段:依赖 iOS 宿主与 M2 登录态,通知伴机形态 |
 
 ## 硬边界(本仓库存在的合法性根基,任何改动不得越过)
 

@@ -57,12 +57,14 @@ the TTL disk cache with offline fallback, a terminal CLI, and the macOS
 SwiftUI shell.
 
 - [x] M0 — Discourse engine, disk cache, CLI, macOS SwiftUI shell
-- [ ] M1 — Windows and Linux native hosts
+- [x] M1 — Windows and Linux native hosts
 - [ ] M2 — signed-in mode: user API key flow, replies, likes, notifications
 - [ ] M3 — reading value-add: thread summaries, translation
 - [ ] M4 — mobile: Android host (Rivet's Kotlin platform) and iOS/iPadOS
       host (Rivet's portable Swift layer), matching the family's
-      full-platform scope
+      full-platform scope; a watchOS notification companion follows as
+      the tail of M4, riding the phone host over Rivet's typed
+      WatchConnectivity layer
 
 ## Build from source
 

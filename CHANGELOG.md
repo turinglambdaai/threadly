@@ -5,6 +5,11 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-12
+
+Windows and Linux join the family: every desktop platform ships native
+installers from this release.
+
 ### Added
 - Windows host (WinUI 3) and Linux host (GTK4 + WebKitGTK): sidebar topic
   browser with search, thread reader rendering the forum's cooked HTML in
@@ -12,6 +17,10 @@ All notable changes to Threadly are documented here. Format follows
   and generation guards against superseded loads. The Windows reader runs
   in WebView2 created in code so a missing runtime degrades to a status
   message instead of crashing the shell.
+- Windows installer: MSI plus portable zip. Linux installers: deb, rpm,
+  AppImage, tar.gz and portable zip on x64 and arm64 — each with SHA256
+  sidecars, and one signed `update-manifest.json` covering macOS, Windows
+  and Linux update payloads.
 
 ## 0.1.0 - 2026-10-12
 

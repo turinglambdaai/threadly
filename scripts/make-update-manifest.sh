@@ -7,7 +7,10 @@
 #   <dist-dir>  directory containing the release artifacts, i.e. the names
 #               the release pipeline produces:
 #                 threadly-<ver>-macos-arm64.zip   threadly-<ver>-macos-x64.zip
-#               (the DMG is a human installer, not a feed entry)
+#                 threadly-<ver>-windows-x64.zip
+#                 threadly-<ver>-linux-x64.tar.gz
+#               (the DMG / MSI / deb / rpm / AppImage are human installers,
+#               not feed entries)
 #   <key-path>  Ed25519 private key PEM (default: $UPDATE_KEY_PATH, then
 #               ~/.threadly/update-signing-key.pem)
 #
@@ -28,7 +31,9 @@ VERSION="${TAG#v}"
   echo "error: tag $TAG does not match VERSION '$(cat "$ROOT/VERSION")'" >&2; exit 1; }
 
 for artifact in "$DIST/threadly-$VERSION-macos-arm64.zip" \
-                "$DIST/threadly-$VERSION-macos-x64.zip"; do
+                "$DIST/threadly-$VERSION-macos-x64.zip" \
+                "$DIST/threadly-$VERSION-windows-x64.zip" \
+                "$DIST/threadly-$VERSION-linux-x64.tar.gz"; do
   [[ -f "$artifact" ]] || { echo "error: missing $artifact" >&2; exit 1; }
 done
 [[ -f "$KEY" ]] || { echo "error: missing signing key $KEY (see scripts/update-keys.sh)" >&2; exit 1; }
@@ -107,7 +112,11 @@ cat > "$SCRIPT" <<RKT
                    (list (artifact 'macos 'arm64
                                    (format "threadly-~a-macos-arm64.zip" version) 'zip)
                          (artifact 'macos 'x64
-                                   (format "threadly-~a-macos-x64.zip" version) 'zip))))
+                                   (format "threadly-~a-macos-x64.zip" version) 'zip)
+                         (artifact 'windows 'x64
+                                   (format "threadly-~a-windows-x64.zip" version) 'zip)
+                         (artifact 'linux 'x64
+                                   (format "threadly-~a-linux-x64.tar.gz" version) 'targz))))
 
 ;; write-signed-manifest validates the struct against the manifest schema
 ;; before signing, so a malformed manifest fails the release instead of
@@ -120,7 +129,7 @@ cat > "$SCRIPT" <<RKT
                            key-id
                            out)
     (newline out)))
-(printf "manifest: ~a (2 artifacts, key-id ~a)\\n"
+(printf "manifest: ~a (4 artifacts, key-id ~a)\\n"
         (build-path dist "update-manifest.json") key-id)
 RKT
 

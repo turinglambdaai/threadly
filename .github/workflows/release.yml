@@ -2,150 +2,240 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ['v*']
 
 permissions:
   contents: write
-  id-token: write
-  attestations: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-jobs:
-  validate:
-    name: Validate release tag
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Check tag matches VERSION, rivet.rktd, app/version.rkt
-        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
-      - name: Check CHANGELOG
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          grep -q "^## $TAG" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $TAG' section"; exit 1; }
+env:
+  # Exact rivet commit releases build against (family pin discipline).
+  # 53487b3 — native Linux deb/rpm/AppImage, portable zips beside every
+  # installer, split linux system sources.
+  RIVET_COMMIT: 53487b31a24b4bd0c747235ee204e540a9410cdf
 
+jobs:
   macos:
-    name: macOS build (${{ matrix.arch }})
-    needs: validate
+    name: macOS (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: arm64
-            runner: macos-latest
-            racket-arch: arm64
-          - arch: x64
-            runner: macos-15-intel
-            racket-arch: x64
+          - { arch: arm64, runner: macos-latest, racket-arch: arm64 }
+          - { arch: x64, runner: macos-15-intel, racket-arch: x64 }
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout Rivet
-        uses: actions/checkout@v4
-        with:
-          repository: turinglambdaai/rivet
-          path: rivet
-      - name: Install Racket (${{ matrix.racket-arch }})
+      - name: Set up Racket CS
         uses: Bogdanp/setup-racket@v1.15
         with:
-          version: stable
-          distribution: full
           architecture: ${{ matrix.racket-arch }}
-      - name: Link Rivet
-        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
-      - name: Package (ad-hoc; notarization activates when secrets exist)
-        run: raco rivet package
-      - name: Update-feed zip + checksum
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install pinned Rivet
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          ditto -c -k --keepParent dist/threadly.app \
-            "threadly-${VERSION}-macos-${{ matrix.arch }}.zip"
-          shasum -a 256 "threadly-${VERSION}-macos-${{ matrix.arch }}.zip" \
-            > "threadly-${VERSION}-macos-${{ matrix.arch }}.zip.sha256"
-      - name: Human installer (DMG) + checksum
+          set -euo pipefail
+          git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
+          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_COMMIT"
+          raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
+      - name: Version preflight (VERSION == rivet.rktd == app/version.rkt == tag)
+        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
+      # DMG (human installer) + portable zip + SBOM + notices, launch
+      # smoke included. The macOS update feed entry is the portable zip,
+      # assembled by scripts/make-update-manifest.sh in the publish job.
+      - name: Release (DMG + portable zip)
+        run: raco rivet release --without-updates --development
+      - name: Family naming + checksums
         run: |
+          set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          hdiutil create -volname Threadly -srcfolder dist/threadly.app -ov -format UDZO \
-            "threadly-${VERSION}-macos-${{ matrix.arch }}.dmg"
-          shasum -a 256 "threadly-${VERSION}-macos-${{ matrix.arch }}.dmg" \
-            > "threadly-${VERSION}-macos-${{ matrix.arch }}.dmg.sha256"
+          ARCH="${{ matrix.arch }}"
+          cd dist
+          # rivet names the portable zip in family form already; only the
+          # DMG lacks the architecture.
+          mv "threadly-${VERSION}-macos.dmg" "threadly-${VERSION}-macos-${ARCH}.dmg"
+          for f in threadly-*; do
+            case "$f" in
+              *.sha256) ;;
+              # The sbom/notices/wixpdb bodies stay in the CI artifact only;
+              # a sidecar without its body on the release is a dangling
+              # reference. Checksum what we upload.
+              *.sbom.cdx.json | *-THIRD_PARTY_NOTICES.txt | *.wixpdb) ;;
+              *) [ -f "$f" ] || continue; [ -f "$f.sha256" ] || shasum -a 256 "$f" > "$f.sha256";;
+            esac
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}
-          path: |
-            threadly-*-macos-*.dmg
-            threadly-*-macos-*.dmg.sha256
-            threadly-*-macos-*.zip
-            threadly-*-macos-*.zip.sha256
-          if-no-files-found: error
+          path: dist/threadly-*
 
-  release:
-    name: Sign manifest + publish
-    needs: [macos]
-    runs-on: macos-latest
-    env:
-      HAS_UPDATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY != '' }}
+  windows:
+    name: Windows (x64)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout Rivet (manifest signer)
-        uses: actions/checkout@v4
-        with:
-          repository: turinglambdaai/rivet
-          path: rivet
-      - name: Install Racket
-        if: env.HAS_UPDATE_KEY == 'true'
+      - name: Set up Racket CS
         uses: Bogdanp/setup-racket@v1.15
         with:
-          version: stable
+          architecture: x64
           distribution: full
-      - name: Link Rivet (rivet/distribution signs the wrapper)
-        if: env.HAS_UPDATE_KEY == 'true'
-        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
-      - name: Install OpenSSL 3
-        if: env.HAS_UPDATE_KEY == 'true'
-        run: brew install openssl@3
+          variant: CS
+          version: '9.3'
+      - name: Install pinned Rivet
+        shell: pwsh
+        run: |
+          git clone https://github.com/turinglambdaai/rivet.git "$env:RUNNER_TEMP\rivet"
+          git -C "$env:RUNNER_TEMP\rivet" checkout $env:RIVET_COMMIT
+          raco pkg install --auto --no-docs --name rivet --link "$env:RUNNER_TEMP\rivet"
+      - name: Install WiX (v5; rivet's MSI toolchain)
+        run: dotnet tool install --global wix --version 5.0.2
+        shell: bash
+      - name: Install crypto (rivet/distribution dependency)
+        run: raco pkg install --auto --no-docs crypto
+        shell: pwsh
+      - name: Version preflight (VERSION == rivet.rktd == app/version.rkt == tag)
+        shell: bash
+        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
+      - name: Release (MSI + portable zip)
+        shell: pwsh
+        run: raco rivet release --without-updates --development
+      - name: Family naming + checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd dist
+          for f in threadly-*; do
+            case "$f" in
+              *.sha256) ;;
+              *.sbom.cdx.json | *-THIRD_PARTY_NOTICES.txt | *.wixpdb) ;;
+              *) [ -f "$f" ] || continue; [ -f "$f.sha256" ] || sha256sum "$f" > "$f.sha256";;
+            esac
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/threadly-*
+
+  linux:
+    name: Linux (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: ubuntu-latest, racket-arch: x64 }
+          - { arch: arm64, runner: ubuntu-24.04-arm, racket-arch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up embeddable Racket CS
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@53487b31a24b4bd0c747235ee204e540a9410cdf
+      # The source-built minimal runtime ships without the packages that
+      # provide `raco make` (compiler-lib) and `raco ctool` (cext-lib),
+      # which `raco rivet build` drives; crypto is a rivet/distribution
+      # dependency. Threadly's backend itself needs nothing beyond base.
+      - name: Install raco commands + crypto into the embeddable runtime
+        run: raco pkg install --auto --no-docs compiler-lib cext-lib crypto
+      - name: Install pinned Rivet
+        run: |
+          set -euo pipefail
+          git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
+          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_COMMIT"
+          raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
+      - name: Install GTK4, WebKitGTK, rpm and packaging tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libgtk-4-dev libadwaita-1-dev libjson-glib-dev libsecret-1-dev \
+            libglib2.0-dev libwebkitgtk-6.0-dev \
+            cmake ninja-build pkg-config file \
+            rpm desktop-file-utils
+      - name: Version preflight (VERSION == rivet.rktd == app/version.rkt == tag)
+        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
+      # tar.gz (the update-feed payload) + deb + rpm + AppImage + portable
+      # zip + SBOM, launch smoke included. The AppImage carries its own
+      # GTK4/WebKitGTK dependency closure; APPIMAGE_EXTRACT_AND_RUN lets
+      # appimagetool run on the runner.
+      - name: Release (tar.gz + deb + rpm + AppImage + portable zip)
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: raco rivet release --without-updates --development
+      - name: Family naming + checksums
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${{ matrix.arch }}"
+          cd dist
+          mv sbom.cdx.json "threadly-${VERSION}-linux-${ARCH}.sbom.cdx.json"
+          mv THIRD_PARTY_NOTICES.txt "threadly-${VERSION}-linux-${ARCH}-THIRD_PARTY_NOTICES.txt"
+          for f in threadly-*; do
+            case "$f" in
+              *.sha256) ;;
+              *.sbom.cdx.json | *-THIRD_PARTY_NOTICES.txt | *.wixpdb) ;;
+              *) [ -f "$f" ] || continue; [ -f "$f.sha256" ] || sha256sum "$f" > "$f.sha256" ;;
+            esac
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/threadly-*
+
+  publish:
+    name: Publish
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install pinned Rivet
+        run: |
+          set -euo pipefail
+          git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
+          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_COMMIT"
+          raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
       - uses: actions/download-artifact@v4
         with:
-          path: dist
-      - name: Flatten artifact dirs
-        run: |
-          find dist -mindepth 2 -maxdepth 2 -type f -exec mv {} dist/ \;
-          find dist -mindepth 1 -maxdepth 1 -type d -empty -delete
-          ls -la dist/
-      - name: Generate + sign update manifest
-        if: env.HAS_UPDATE_KEY == 'true'
-        env:
-          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
-        run: |
-          KEY_FILE=$(mktemp)
-          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
-          bash scripts/make-update-manifest.sh "${{ github.ref_name }}" dist "$KEY_FILE"
-          rm -f "$KEY_FILE"
-        # a release without the update key still ships; clients simply see
-        # no manifest and stay on their version (::warning:: marks it)
-      - name: SHA256SUMS
-        run: |
-          cd dist
-          # strip stray CR from Windows-authored sums before checking
-          cat *.sha256 | tr -d '\r' > SHA256SUMS
-          shasum -a 256 --check SHA256SUMS
-      - name: Publish release
+          path: artifacts
+      - name: Gather + sign the update feed + publish
         env:
           GH_TOKEN: ${{ github.token }}
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
         run: |
-          if gh release view "${{ github.ref_name }}" -R turinglambdaai/threadly >/dev/null 2>&1; then
-            gh release upload "${{ github.ref_name }}" dist/* --clobber -R turinglambdaai/threadly
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          mv artifacts/macos-arm64/* artifacts/macos-x64/* artifacts/windows/* \
+             artifacts/linux-x64/* artifacts/linux-arm64/* dist/
+          # The portable zips (macOS/Windows) and the tar.gz (Linux) are the
+          # update feed, assembled and signed by make-update-manifest.sh.
+          # Missing secret → warn and publish without a manifest.
+          if [[ -n "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
+            KEY_PEM="$RUNNER_TEMP/update-signing-key.pem"
+            printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_PEM"
+            bash scripts/make-update-manifest.sh "$GITHUB_REF_NAME" dist "$KEY_PEM"
           else
-            gh release create "${{ github.ref_name }}" dist/* \
-              -R turinglambdaai/threadly \
-              --title "Threadly ${GITHUB_REF_NAME#v}" \
-              --generate-notes
+            echo "::warning::UPDATE_ED25519_PRIVATE_KEY not set — release ships without an update manifest"
           fi
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: dist/*
+          awk -v header="## ${VERSION}" '
+            index($0, header) == 1 {on=1; next}
+            on && /^## / {exit}
+            on {print}
+          ' CHANGELOG.md > /tmp/notes.md
+          cd dist
+          for f in *.sha256; do [ -s "$f" ] || rm -f "$f"; done
+          cat *.sha256 > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Threadly ${VERSION}" \
+            --notes-file /tmp/notes.md \
+            *.zip *.tar.gz *.dmg *.msi *.deb *.rpm *.AppImage \
+            *.sha256 SHA256SUMS update-manifest.json
