@@ -5,6 +5,23 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.4.0 - 2026-10-12
+
+The forum's own navigation: categories are now first-class.
+
+### Added
+- Category browsing in the Discourse information architecture — a Browse
+  section (Latest plus every category in the forum's own order and colors)
+  above the topic list, and per-category topic pages served by
+  /c/<slug>/<id>.json. CLI gains `category <slug> <id>`.
+- CLI positional-argument parsing fix (multi-argument commands received
+  their arguments reversed).
+
+### Fixed
+- A latent wire-contract bug: read-json maps JSON null to the 'null
+  symbol, which leaked into RPC rows and failed the List(List(String))
+  contract on category pages containing reply-less pinned topics.
+
 ## 0.3.0 - 2026-10-12
 
 The hosts learn to update themselves — the release feed published since
