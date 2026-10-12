@@ -29,8 +29,9 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Bottom strip: update banner when one is available, backend failures
-    /// surface here too (notify events), quiet when everything is fine.
+    /// Bottom strip: update banner when one is available, an "up to date"
+    /// acknowledgement after a manual check, backend failures surface here
+    /// too (notify events), quiet when everything is fine.
     private var statusBar: some View {
         VStack(spacing: 0) {
             if let manifest = model.pendingUpdateManifest {
@@ -51,6 +52,22 @@ struct ContentView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(DesignTokens.accentSoft)
+            } else if isUpToDate {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Threadly is up to date.")
+                        .font(.callout)
+                    Spacer()
+                    Button("Dismiss") { model.updateOutcome = nil }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(.bar)
+                .overlay(alignment: .top) { Divider() }
             }
             if store.statusLine.isEmpty == false {
                 HStack(spacing: 8) {
@@ -69,6 +86,13 @@ struct ContentView: View {
                 .background(.bar)
             }
         }
+    }
+
+    private var isUpToDate: Bool {
+        if case .success(.upToDate) = model.updateOutcome {
+            return true
+        }
+        return false
     }
 }
 
