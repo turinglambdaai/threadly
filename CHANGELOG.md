@@ -5,6 +5,14 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.5.2 - 2026-10-12
+
+Graceful empty states: Uncategorized on the forum genuinely has zero
+topics, and the old full-sidebar overlay swallowed the whole Browse list
+behind a giant No topics view. Empty categories now show a subdued inline
+note in the Topics section (Uncategorized explains the forum keeps it
+empty) and the detail pane nudges toward other categories or search.
+
 ## 0.5.1 - 2026-10-12
 
 Fixes the macOS update download leg: the byte-by-byte bytes(from:) stream
