@@ -331,7 +331,7 @@ void MainWindow::LoadCategory(std::wstring const& slug, std::int64_t const id,
     auto const dispatcher = DispatcherQueue();
     auto const weak = get_weak();
     (void)api.category_topics_list_async(
-        narrow(slug), std::to_string(id),
+        winrt::to_string(slug), std::to_string(id),
         [dispatcher, weak](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
           dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
             if (auto window = weak.get()) {

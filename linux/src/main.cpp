@@ -294,6 +294,8 @@ void apply_rows(std::vector<TopicRow> rows, bool const search_mode) {
 }
 
 void update_scope_heading();
+void load_latest(bool fresh);
+void load_category(std::int64_t id, std::string const& slug);
 
 // ---- completion plumbing -----------------------------------------------------------
 
