@@ -28,6 +28,7 @@
          parse-search
          fetch-categories
          parse-categories
+         fetch-category-topics
          html->text)
 
 (struct topic-summary (id title slug created-at last-posted-at
@@ -80,6 +81,11 @@
 
 ;; ---- parsing (pure functions over jsexpr) ----------------------------------
 
+;; read-json maps JSON null to the 'null symbol; hash-ref's default only
+;; fires on a MISSING key, so every optional field goes through this.
+(define (json-clean v)
+  (if (eq? v 'null) #f v))
+
 (define (hash-or-fail who doc)
   (unless (hash? doc)
     (error who "expected a JSON object"))
@@ -89,8 +95,8 @@
   (topic-summary (hash-ref t 'id 0)
                  (hash-ref t 'title "")
                  (hash-ref t 'slug "")
-                 (hash-ref t 'created_at #f)
-                 (hash-ref t 'last_posted_at #f)
+                 (json-clean (hash-ref t 'created_at #f))
+                 (json-clean (hash-ref t 'last_posted_at #f))
                  (hash-ref t 'posts_count 0)
                  (hash-ref t 'reply_count 0)
                  (hash-ref t 'views 0)
@@ -115,7 +121,7 @@
       (forum-post (hash-ref p 'id 0)
                   (hash-ref p 'username "")
                   (hash-ref p 'avatar_template "")
-                  (hash-ref p 'created_at #f)
+                  (json-clean (hash-ref p 'created_at #f))
                   (hash-ref p 'cooked "")
                   (hash-ref p 'post_number 0))))
   (values topic posts))
@@ -146,6 +152,11 @@
 
 (define (fetch-topic id)
   (parse-topic (fetch-json-cached (format "/t/~a.json" id))))
+
+;; A category page (/c/<slug>/<id>.json) carries the same topic_list shape
+;; as latest — parse-latest handles it.
+(define (fetch-category-topics slug id)
+  (parse-latest (fetch-json-cached (format "/c/~a/~a.json" slug id))))
 
 (define (fetch-search q)
   (parse-search (fetch-json-cached (format "/search.json?q=~a" (uri-encode q)))))

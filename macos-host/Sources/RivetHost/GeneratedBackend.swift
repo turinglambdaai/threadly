@@ -97,6 +97,10 @@ public struct RivetAPI: Sendable {
         let result = try await client.call("categories-list", arguments: [])
         return try decode__List_List_String_(result)
     }
+    public func category_topics_list(slug: String, id: String) async throws -> [[String]] {
+        let result = try await client.call("category-topics-list", arguments: [encode_String(slug), encode_String(id)])
+        return try decode__List_List_String_(result)
+    }
     public func health() async throws -> String {
         let result = try await client.call("health", arguments: [])
         return try decode_String(result)

@@ -26,7 +26,7 @@
   (let loop ([as args] [pos '()] [page 0] [json? #f] [no-cache? #f])
     (match as
       ['() (values (and (pair? pos) (first (reverse pos)))
-                   (reverse (rest (reverse pos)))
+                   (rest (reverse pos))
                    page json? no-cache?)]
       [(cons "--json" rest) (loop rest pos page #t no-cache?)]
       [(cons "--no-cache" rest) (loop rest pos page json? #t)]
@@ -113,6 +113,16 @@
                    (forum-category-color c)
                    (forum-category-name c)))))
 
+(define (cmd-category slug id json?)
+  (define doc (fetch-json-cached (format "/c/~a/~a.json" slug id)))
+  (if json?
+      (print-json doc)
+      (for ([t (in-list (parse-latest doc))])
+        (table-row (~a (topic-summary-id t) #:min-width 7)
+                   (pad (topic-summary-posts-count t) 4)
+                   (pad (topic-summary-views t) 6)
+                   (topic-summary-title t)))))
+
 ;; offline: data dir writable, cache entry count
 (define (cmd-doctor)
   (define dir (with-handlers ([exn:fail? (lambda (_) #f)]) (ensure-data-dir!)))
@@ -168,6 +178,10 @@
             [(list q) (cmd-search q json?)]
             [_ (displayln (usage) (current-error-port)) (exit 2)])]
          ["categories" (cmd-categories json?)]
+         ["category"
+          (match positionals
+            [(list slug id) (cmd-category slug id json?)]
+            [_ (displayln (usage) (current-error-port)) (exit 2)])]
          ["update-check" (cmd-update-check)]
          ["doctor" (cmd-doctor)]
          [_ (displayln (format "threadly: unknown command: ~a\n\n~a" command (usage))

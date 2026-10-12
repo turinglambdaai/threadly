@@ -112,7 +112,7 @@ final class AppModel: ObservableObject {
         ready = true
         bootStatus = "Ready"
         await store.loadCategories()
-        await store.loadLatest()
+        await store.load(scope: .latest)
         silentUpdateCheck()
     }
 

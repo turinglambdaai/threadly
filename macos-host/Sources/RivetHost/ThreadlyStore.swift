@@ -31,16 +31,28 @@ struct PostRow: Identifiable, Hashable {
 /// handleEvent.
 @MainActor
 final class ThreadlyStore: ObservableObject {
-    struct ForumCategory: Hashable {
+    struct ForumCategory: Identifiable, Hashable {
+        let id: Int
         let name: String
+        let slug: String
         let color: Color?
+
+        /// Discourse's slug/id pair is the category URL + API address.
+        var scope: Scope { .category(id: id, slug: slug) }
+    }
+
+    /// What the sidebar is browsing: the whole forum, or one category.
+    enum Scope: Hashable {
+        case latest
+        case category(id: Int, slug: String)
     }
 
     @Published var topics: [TopicRow] = []
     @Published var loadingTopics = false
     @Published var searchResults: [TopicRow] = []
     @Published var searching = false
-    @Published var categories: [Int: ForumCategory] = [:]
+    @Published var categories: [ForumCategory] = []
+    @Published var scope: Scope = .latest
     @Published var selectedTopic: TopicRow?
     @Published var posts: [PostRow] = []
     @Published var loadingPosts = false
@@ -78,25 +90,35 @@ final class ThreadlyStore: ObservableObject {
 
     // MARK: - loads
 
-    /// fresh=false serves the disk cache (TTL on the backend side); the
-    /// toolbar refresh passes fresh=true to bypass it.
-    func loadLatest(fresh: Bool = false) async {
+    /// Load whichever scope the sidebar is browsing. fresh=false serves the
+    /// disk cache (TTL on the backend side); the toolbar refresh passes
+    /// fresh=true to bypass it.
+    func load(scope: Scope, fresh: Bool = false) async {
         guard let api else { return }
         loadingTopics = true
         defer { loadingTopics = false }
+        self.scope = scope
         do {
-            let rows = try await api.latest_list(page: 0, fresh: fresh)
+            let rows: [[String]]
+            switch scope {
+            case .latest:
+                rows = try await api.latest_list(page: 0, fresh: fresh)
+            case .category(let id, let slug):
+                rows = try await api.category_topics_list(slug: slug, id: String(id))
+            }
             topics = rows.map(Self.topic(fromLatest:))
             if searchResults.isEmpty == false { searchResults = [] }
+            selectedTopic = nil
+            posts = []
             statusLine = ""
         } catch {
             statusLine = "Couldn't load topics: \(error)"
         }
     }
 
-    /// Toolbar refresh: bypass the disk cache.
+    /// Toolbar refresh: bypass the disk cache for the current scope.
     func refresh() {
-        Task { await loadLatest(fresh: true) }
+        Task { await load(scope: scope, fresh: true) }
         Task { await loadCategories() }
     }
 
@@ -104,15 +126,17 @@ final class ThreadlyStore: ObservableObject {
         guard let api else { return }
         do {
             let rows = try await api.categories_list()
-            var map: [Int: ForumCategory] = [:]
-            // category row = (id name slug color)
-            for row in rows where row.count >= 2 {
-                map[Int(row[0]) ?? -1] = ForumCategory(
+            // category row = (id name slug color); the feed order is the
+            // forum's own position order — keep it for the sidebar
+            categories = rows.compactMap { row in
+                guard row.count >= 3, let id = Int(row[0]) else { return nil }
+                return ForumCategory(
+                    id: id,
                     name: row[1],
+                    slug: row[2],
                     color: Color(forumHex: row.count > 3 ? row[3] : "")
                 )
             }
-            categories = map
         } catch {
             // category names are decoration; leave them blank on failure
         }
@@ -191,10 +215,11 @@ final class ThreadlyStore: ObservableObject {
     }
 
     func categoryName(_ id: Int) -> String {
-        categories[id]?.name ?? (id == 0 ? "" : "Category \(id)")
+        let category = categories.first { $0.id == id }
+        return category?.name ?? (id == 0 ? "" : "Category \(id)")
     }
 
     func categoryColor(_ id: Int) -> Color? {
-        categories[id]?.color
+        categories.first { $0.id == id }?.color
     }
 }

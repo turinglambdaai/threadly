@@ -77,6 +77,21 @@
                (~a (topic-summary-like-count t))
                (or (topic-summary-last-posted-at t) "")))))))
 
+;; A category's topics; same row shape as latest-list so hosts render one
+;; list model for both scopes.
+(define-rpc (category-topics-list [slug String] [id String] : (List (List String)))
+  (rows-or-notify
+   (lambda ()
+     (for/list ([t (in-list (fetch-category-topics slug (string->number id)))])
+       (list (~a (topic-summary-id t))
+             (topic-summary-title t)
+             (~a (topic-summary-category-id t))
+             (~a (topic-summary-posts-count t))
+             (~a (topic-summary-reply-count t))
+             (~a (topic-summary-views t))
+             (~a (topic-summary-like-count t))
+             (or (topic-summary-last-posted-at t) "")))))
+
 (define-rpc (topic-open [id String] : (List (List String)))
   (rows-or-notify
    (lambda ()

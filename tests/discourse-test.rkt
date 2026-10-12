@@ -64,6 +64,19 @@
   (check-true (exact-positive-integer? (forum-category-id c)))
   (check-true ((string-length (forum-category-name c)) . > . 0)))
 
+;; ---- fetch-category-topics shape (same topic_list as latest) -------------------
+
+(test-case "parse-latest over a category page fixture"
+  (define topics (parse-latest (load-fixture "category-general.json")))
+  (check-true ((length topics) . > . 0))
+  ;; a pinned welcome topic with no replies carries last_posted_at: null —
+  ;; it must surface as #f, never the 'null symbol (which would fail the
+  ;; RPC's (List (List String)) contract)
+  (for ([t (in-list topics)])
+    (check-true (or (string? (topic-summary-last-posted-at t))
+                    (not (topic-summary-last-posted-at t)))
+                "last-posted-at is a string or #f")))
+
 ;; ---- html->text ---------------------------------------------------------------
 
 (test-case "html->text: tags and entities"

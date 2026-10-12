@@ -82,6 +82,11 @@ pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生�
 
 ## 坑(已踩过)
 
+- **Racket read-json 把 JSON null 解析成 'null 符号**,而 `hash-ref` 的
+  默认值只在键缺失时生效——可选字段(如 last_posted_at)必须过
+  `json-clean`('null→#f),否则 'null 混进 RPC 行直接炸
+  `(List (List String))` 契约;本地 fixture 不含 null 行时不暴露,
+  真机分类页才炸。
 - **壳的观察断链**:`@EnvironmentObject model` + `model.store.*` 时,store
   的 `@Published` 变化不触发视图重渲染(PodLens 同款隐患)。必须
   `.environmentObject(model.store)` 单独注入,视图直接声明

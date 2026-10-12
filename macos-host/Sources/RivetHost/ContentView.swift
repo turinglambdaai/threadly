@@ -70,12 +70,12 @@ struct ContentView: View {
                 .overlay(alignment: .top) { Divider() }
             }
             if store.statusLine.isEmpty == false {
-                HStack(spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.yellow)
                     Text(store.statusLine)
                         .font(.caption)
-                        .lineLimit(2)
+                        .textSelection(.enabled)
                     Spacer()
                     Button("Dismiss") { store.statusLine = "" }
                         .buttonStyle(.borderless)
@@ -135,17 +135,42 @@ private struct CountStrip: View {
 
 // MARK: - Sidebar
 
+/// What a sidebar row is: a browsing scope (Latest / a category) or a
+/// topic. One selection binding drives both the scope switch and the
+/// thread reader.
+enum SidebarItem: Hashable {
+    case scope(ThreadlyStore.Scope)
+    case topic(Int)
+}
+
 private struct SidebarView: View {
     @EnvironmentObject private var store: ThreadlyStore
     @State private var searchText = ""
 
     var body: some View {
         List(selection: selectionBinding) {
+            // --- Browse: the Discourse information architecture — the
+            // forum first, then its categories in the forum's own order.
+            Section("Browse") {
+                Label("Latest", systemImage: "tray.2")
+                    .tag(SidebarItem.scope(.latest))
+                ForEach(store.categories) { category in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(category.color ?? Color.secondary)
+                            .frame(width: 9, height: 9)
+                        Text(category.name)
+                    }
+                    .tag(SidebarItem.scope(category.scope))
+                }
+            }
+
+            // --- Topics: whatever the current scope returned.
             if store.isSearchActive {
                 Section {
                     ForEach(store.displayTopics) { topic in
                         TopicListRow(topic: topic, searchResult: true)
-                            .tag(topic.id)
+                            .tag(SidebarItem.topic(topic.id))
                     }
                 } header: {
                     HStack {
@@ -160,10 +185,10 @@ private struct SidebarView: View {
                     }
                 }
             } else {
-                Section("Latest") {
+                Section(scopeTitle) {
                     ForEach(store.displayTopics) { topic in
                         TopicListRow(topic: topic, searchResult: false)
-                            .tag(topic.id)
+                            .tag(SidebarItem.topic(topic.id))
                     }
                 }
             }
@@ -184,6 +209,9 @@ private struct SidebarView: View {
                 store.clearSearch()
             }
         }
+        .onChange(of: store.scope) { _, newScope in
+            Task { await store.load(scope: newScope) }
+        }
         .overlay {
             if store.loadingTopics && store.displayTopics.isEmpty {
                 ProgressView("Loading topics…")
@@ -197,14 +225,45 @@ private struct SidebarView: View {
         }
     }
 
-    private var selectionBinding: Binding<Int?> {
+    private var scopeTitle: String {
+        switch store.scope {
+        case .latest:
+            return "Latest"
+        case .category(let id, _):
+            return store.categoryName(id)
+        }
+    }
+
+    private var selectionBinding: Binding<SidebarItem?> {
         Binding(
-            get: { store.selectedTopic?.id },
-            set: { id in
-                guard let id,
-                      let topic = store.displayTopics.first(where: { $0.id == id })
-                else { return }
-                Task { await store.openTopic(topic) }
+            get: {
+                // a selected topic wins; otherwise reflect the scope row
+                if let topic = store.selectedTopic {
+                    return .topic(topic.id)
+                }
+                return .scope(store.scope)
+            },
+            set: { item in
+                switch item {
+                case .scope(let scope):
+                    if scope != store.scope || store.isSearchActive {
+                        searchText = ""
+                        store.clearSearch()
+                        // onChange(of: store.scope) drives the load; fire
+                        // directly for same-scope reloads (Latest row)
+                        if scope == store.scope {
+                            Task { await store.load(scope: scope) }
+                        } else {
+                            store.scope = scope
+                        }
+                    }
+                case .topic(let id):
+                    if let topic = store.displayTopics.first(where: { $0.id == id }) {
+                        Task { await store.openTopic(topic) }
+                    }
+                case .none:
+                    break
+                }
             }
         )
     }
