@@ -56,11 +56,7 @@ raco rivet build                 # 生成 GeneratedBackend.swift + 构建壳
 
 Rivet 工作约定:开发前 pull `~/Codes/rivet`,pull 后清 `compiled/` 再
 `raco setup`;生成 GeneratedBackend.swift 前核对 rivet pin;发布构建切
-pin、开发跟最新。
-
-**颜值第一生产力(用户 2026-10-11 定调)**:界面必须优雅美观,按苹果的
-设计做。壳相关改动的完成定义=亮暗双模式实机截图验收;不达标的 UI 等于
-没做。图标改版走 `scripts/make-icons.py`,禁止手改生成物。
+pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生成物。
 
 ## 版本与发布
 
