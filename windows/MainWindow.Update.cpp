@@ -23,6 +23,8 @@
 namespace winrt::RivetHost::implementation {
 namespace {
 
+namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
+
 constexpr wchar_t kReleasesUrl[] =
     L"https://github.com/turinglambdaai/threadly/releases";
 
