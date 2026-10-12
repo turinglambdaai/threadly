@@ -18,7 +18,7 @@ iOS/iPadOS/Android 后期必须落地。**技术形态遵循
 | 引擎(Discourse API/缓存) | Racket 9.3 | `app/` | ✅ fixture 测试全绿 |
 | CLI | Racket | `app/cli.rkt` | ✅ latest/topic/search/categories/doctor |
 | macOS 壳 | SwiftUI | `macos-host/` | ✅ 首片 |
-| Windows/Linux 壳 | WinUI 3 / GTK4 | (待建) | M1 |
+| Windows/Linux 壳 | WinUI 3 / GTK4+WebKitGTK | `windows/` `linux/` | ✅ M1(CI 编译门+launch smoke) |
 | Android 壳 | Kotlin(Rivet `platform/android`,Kotlin codegen 已就绪) | (待建) | M4 |
 | iOS/iPadOS 壳 | SwiftUI(Rivet portable Swift 层已跨编译,等其移动交付链 Phase 8) | (待建) | M4 |
 
@@ -91,3 +91,21 @@ pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生�
 - **GUI 自动化**:cliclick 点击前必须先 AXRaise + frontmost,否则点到
   前台窗口;截被遮挡窗口用 `screencapture -l <CGWindowID>`
   (CGWindowListCopyWindowInfo 查 id)。
+- **WinUI 3 的 WebView2 控件在 Windows App SDK 里**
+  (`Microsoft.UI.Xaml.Controls.WebView2`,XAML 默认命名空间直接写
+  `<WebView2>`);`Microsoft.Web.WebView2` NuGet 只提供 CoreWebView2 与
+  loader,没有 XAML 控件也没有 winrt 投影头——pch 不要 include 它。
+  控件用代码创建并 try/catch:缺 loader/运行时只降级阅读器,不能炸壳。
+- **GTK4 的 WebKitGTK 是 `webkitgtk-6.0`**(pkg-config 名、apt 包
+  `libwebkitgtk-6.0-dev`);`webkit2gtk-4.1` 是 GTK3+libsoup3,别碰。
+  伞头文件是小写 `#include <webkit/webkit.h>`。
+- **Linux CI 的 embed Racket**(setup-embed-racket 产出的 minimal)不带
+  `raco make`(compiler-lib)和 `raco ctool`(cext-lib),`raco rivet
+  build` 前要 `raco pkg install --auto --no-docs compiler-lib cext-lib`;
+  rivet 0.6.x 把 linux system 拆成多个 .cpp,CMakeLists 须逐个列出
+  (shutdown/notifications/tray/autostart/secure_storage/single_instance
+  /system_services_internal),只编 system_services.cpp 会链接失败。
+- **本机 git 突然报 Xcode license**(Xcode/CLT 后台升级后 `/usr/bin/git`
+  被挡,exit 69):临时用
+  `/Applications/Xcode.app/Contents/Developer/usr/bin/git`,根治需要用户
+  跑 `sudo xcodebuild -license accept`(agent 无 sudo)。

@@ -5,6 +5,14 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+### Added
+- Windows host (WinUI 3) and Linux host (GTK4 + WebKitGTK): sidebar topic
+  browser with search, thread reader rendering the forum's cooked HTML in
+  a 680px reading column (light and dark), notify-event status surface,
+  and generation guards against superseded loads. The Windows reader runs
+  in WebView2 created in code so a missing runtime degrades to a status
+  message instead of crashing the shell.
+
 ## 0.1.0 - 2026-10-12
 
 First release — born in the family's 0.x era.
