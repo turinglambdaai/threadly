@@ -214,6 +214,20 @@ struct UpdateService {
         return false
     }
 
+    /// SHA-256 of a file on disk, streamed in 1 MiB chunks.
+    static func sha256(of url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while autoreleasepool(invoking: { () -> Bool in
+            let chunk = handle.readData(ofLength: 1 << 20)
+            guard !chunk.isEmpty else { return false }
+            hasher.update(data: chunk)
+            return true
+        }) {}
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
     // MARK: install (macOS: zip → ditto → atomic swap with rollback)
 
     var installedBundleURL: URL? {
@@ -244,32 +258,17 @@ struct UpdateService {
         // itself. Deleting eagerly would race the script and roll back.
 
         let zipURL = workDir.appendingPathComponent("threadly-update.zip")
-        let (bytes, response) = try await session(from: sessionConfiguration).bytes(from: artifact.url)
+        // Download via a URLSession download task (system-managed, disk
+        // backed). The byte-by-byte bytes(from:) stream stalls against the
+        // GitHub CDN on some networks — it would sit at 4 MiB forever.
+        let (tempURL, response) = try await session(from: sessionConfiguration)
+            .download(from: artifact.url)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw UpdateError.checksumMismatch
         }
-        guard FileManager.default.createFile(atPath: zipURL.path, contents: nil) else {
-            throw UpdateError.installFailed("cannot create temp file")
-        }
-        let handle = try FileHandle(forWritingTo: zipURL)
-        defer { try? handle.close() }
-        var hasher = SHA256()
-        var buffer = Data()
-        buffer.reserveCapacity(1 << 20)
-        for try await byte in bytes {
-            buffer.append(byte)
-            if buffer.count >= 1 << 20 {
-                hasher.update(data: buffer)
-                try handle.write(contentsOf: buffer)
-                buffer.removeAll(keepingCapacity: true)
-            }
-        }
-        if !buffer.isEmpty {
-            hasher.update(data: buffer)
-            try handle.write(contentsOf: buffer)
-        }
-        let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        let digest = try Self.sha256(of: tempURL)
         guard digest == artifact.sha256.lowercased() else { throw UpdateError.checksumMismatch }
+        try FileManager.default.moveItem(at: tempURL, to: zipURL)
 
         let unpacked = workDir.appendingPathComponent("unpacked", isDirectory: true)
         try FileManager.default.createDirectory(at: unpacked, withIntermediateDirectories: true)

@@ -5,6 +5,14 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.5.1 - 2026-10-12
+
+Fixes the macOS update download leg: the byte-by-byte bytes(from:) stream
+stalled against the GitHub CDN on some networks (it would sit at 4 MiB
+forever). The artifact now downloads through a URLSession download task —
+system-managed and disk backed — and the archive is still held to the
+signed SHA-256 before anything is trusted.
+
 ## 0.5.0 - 2026-10-12
 
 Category navigation reaches every desktop.
