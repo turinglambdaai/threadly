@@ -50,6 +50,12 @@ else()
   message(FATAL_ERROR "Set RIVET_RACKET_LIBRARY to libracketcs, or RIVET_RACKET_LIB_DIR to its directory.")
 endif()
 
+# Rivet 0.6.x keeps splitting platform/linux/system into more translation
+# units; newer pins add files older pins fold into system_services.cpp.
+# Link whatever exists so both release pins and main-branch rivet build.
+file(GLOB RIVET_OPTIONAL_SYSTEM_SOURCES
+     "${RIVET_ROOT}/platform/linux/system/global_shortcuts.cpp")
+
 add_executable(RivetHost
   src/main.cpp
   "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
@@ -60,7 +66,7 @@ add_executable(RivetHost
   "${RIVET_ROOT}/platform/linux/system/system_services.cpp"
   "${RIVET_ROOT}/platform/linux/system/system_services_internal.cpp"
   "${RIVET_ROOT}/platform/linux/system/crash_shutdown.cpp"
-  "${RIVET_ROOT}/platform/linux/system/global_shortcuts.cpp"
+  ${RIVET_OPTIONAL_SYSTEM_SOURCES}
   "${RIVET_ROOT}/platform/linux/system/notifications.cpp"
   "${RIVET_ROOT}/platform/linux/system/tray.cpp"
   "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
