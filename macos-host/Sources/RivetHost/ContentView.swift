@@ -148,7 +148,9 @@ private struct SidebarView: View {
     @State private var searchText = ""
 
     var body: some View {
-        List(selection: selectionBinding) {
+        VStack(spacing: 0) {
+            searchField
+            List(selection: selectionBinding) {
             // --- Browse: the Discourse information architecture — the
             // forum first, then its categories in the forum's own order.
             Section("Browse") {
@@ -202,16 +204,9 @@ private struct SidebarView: View {
                 }
             }
         }
+        }
         .listStyle(.sidebar)
         .frame(minWidth: 300)
-        .searchable(
-            text: $searchText,
-            placement: .sidebar,
-            prompt: "Search the archive"
-        )
-        .onSubmit(of: .search) {
-            Task { await store.search(searchText) }
-        }
         .onChange(of: searchText) { _, newValue in
             if newValue.trimmingCharacters(in: .whitespaces).isEmpty,
                store.isSearchActive {
@@ -221,6 +216,35 @@ private struct SidebarView: View {
         .onChange(of: store.scope) { _, newScope in
             Task { await store.load(scope: newScope) }
         }
+    }
+
+    /// Pinned above the scrolling list — the searchable field used to
+    /// scroll away with the topic list, leaving no way to search.
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search the archive", text: $searchText)
+                .textFieldStyle(.plain)
+                .onSubmit {
+                    Task { await store.search(searchText) }
+                }
+            if searchText.isEmpty == false {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(6)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     private var scopeTitle: String {
