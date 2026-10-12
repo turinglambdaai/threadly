@@ -186,8 +186,7 @@ body {
   font-family: "Adwaita Sans", Cantarell, -apple-system, "Segoe UI", sans-serif;
   font-size: 15px; line-height: 1.6;
   margin: 0 auto; padding: 22px 28px 48px;
-  max-width: 680px;
-  background: transparent;
+  max-width: 680px;  background: transparent;
 }
 .post { padding: 16px 0 8px; border-bottom: 1px solid rgba(128,128,128,.2); }
 .post:first-child { padding-top: 0; }
@@ -197,7 +196,7 @@ body {
   margin-bottom: 8px;
 }
 .avatar { width: 26px; height: 26px; border-radius: 50%; margin-right: 2px; }
-.meta .author { font-weight: 600; color: )HTML" +
+.meta .author { font-weight: 600; color: )HTML"} +
          kAccent + R"HTML(; }
 .meta .dot { opacity: .45; }
 h1,h2,h3 { line-height: 1.3; }
