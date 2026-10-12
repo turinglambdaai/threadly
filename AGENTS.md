@@ -60,15 +60,20 @@ pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生�
 
 ## 版本与发布
 
+- **发版以 taskly v0.1.2 实际资产为家族标杆**,已有平台范围逐项对齐:
+  macOS arm64/x64 各 dmg+zip(更新载荷)且每件带 `.sha256` sidecar,汇总
+  `SHA256SUMS`,加单一签名 feed `update-manifest.json`;Windows/Linux
+  宿主落地后按标杆补 msi+zip 与 deb+rpm+AppImage+tar.gz+zip 全矩阵。
+- 发版前必实测产物(下载 dmg/安装、启动、读帖)。
 - VERSION == rivet.rktd version == app/version.rkt,由
   `scripts/check-release-version.sh` 三方校验,CI 跑。
-- CHANGELOG 是 Keep-a-Changelog 风格;发版前 `## x.y.z` 段必须先写。
+- CHANGELOG 是 Keep-a-Changelog 风格;发版前 `## x.y.z` 段必须先写,
+  release 由此产 validate 门拦截。
 - 新产品走 0.x 纪元,首发 0.1.0。
-- 发布管线:macOS DMG(arm64/x64)+ 签名 update feed
-  (`scripts/make-update-manifest.sh`,密钥经 `scripts/update-keys.sh`
-  生成后进 Sync/Keys + GitHub Secret `UPDATE_ED25519_PRIVATE_KEY`)。
-- Windows/Linux 壳落地后再扩 release 管线(家族标杆:deb+rpm+AppImage+
-  Flatpak+tar.gz,参照 podlens release.yml)。
+- 更新签名:Ed25519,`RIVET_UPDATE_KEY_ID=threadly-2026-10`;私钥三处
+  就位(Sync/Keys `secrets.ini` [threadly] 节 + GitHub Secret
+  `UPDATE_ED25519_PRIVATE_KEY` PEM 形态;散件即到即收立删)。轮换规则见
+  Sync/Keys/AGENTS.md。
 
 ## 坑(已踩过)
 
