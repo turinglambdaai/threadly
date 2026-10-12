@@ -53,7 +53,18 @@ endif()
 add_executable(RivetHost
   src/main.cpp
   "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
+  # Rivet's system services span several translation units as of 0.6.x
+  # (shutdown bridge, notifications, tray, autostart, secure storage,
+  # single instance); compile the whole directory so future splits keep
+  # linking.
   "${RIVET_ROOT}/platform/linux/system/system_services.cpp"
+  "${RIVET_ROOT}/platform/linux/system/system_services_internal.cpp"
+  "${RIVET_ROOT}/platform/linux/system/crash_shutdown.cpp"
+  "${RIVET_ROOT}/platform/linux/system/notifications.cpp"
+  "${RIVET_ROOT}/platform/linux/system/tray.cpp"
+  "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
+  "${RIVET_ROOT}/platform/linux/system/secure_storage.cpp"
+  "${RIVET_ROOT}/platform/linux/system/single_instance.cpp"
   "${RIVET_ROOT}/platform/linux/theme/theme.cpp"
   "${RIVET_ROOT}/runtime/src/protocol.cpp"
 )
