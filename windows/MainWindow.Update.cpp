@@ -57,6 +57,31 @@ std::wstring to_wide(std::string const& text) {
   return result;
 }
 
+std::string to_narrow(std::wstring const& wide) {
+  auto const size = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                          wide.data(),
+                                          static_cast<int>(wide.size()),
+                                          nullptr, 0, nullptr, nullptr);
+  std::string result(static_cast<std::size_t>(size > 0 ? size : 0), '\0');
+  if (size > 0) {
+    ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(),
+                          static_cast<int>(wide.size()), result.data(), size,
+                          nullptr, nullptr);
+  }
+  return result;
+}
+
+std::filesystem::path executable_path() {
+  std::wstring buffer(32768, L'\0');
+  auto const length = ::GetModuleFileNameW(nullptr, buffer.data(),
+                                          static_cast<DWORD>(buffer.size()));
+  if (length == 0 || length == buffer.size()) {
+    return {};
+  }
+  buffer.resize(length);
+  return std::filesystem::path(buffer);
+}
+
 // %TEMP%\threadly-update — handoff script, extract dir, markers, and the
 // best-effort throttle stamp live here. Update state that must not pollute
 // the data directory (an update never touches it).
@@ -303,7 +328,7 @@ void MainWindow::HandleUpdateCheckResult(
   }
   // status "error": the record's reason beats the bare status word
   auto const detail = to_wide(check.error.value_or(check.status));
-  SetErrorUi(detail);
+  SetErrorUi(to_narrow(detail));
 }
 
 // ---------- download -----------------------------------------------------------
