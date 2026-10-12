@@ -5,6 +5,12 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.5.3 - 2026-10-12
+
+Pins the sidebar search field above the scrolling topic list — it used to
+scroll away with the list, leaving no way to search. Same pattern as the
+Windows and Linux hosts, plus an inline clear button.
+
 ## 0.5.2 - 2026-10-12
 
 Graceful empty states: Uncategorized on the forum genuinely has zero
