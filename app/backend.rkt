@@ -90,7 +90,7 @@
              (~a (topic-summary-reply-count t))
              (~a (topic-summary-views t))
              (~a (topic-summary-like-count t))
-             (or (topic-summary-last-posted-at t) "")))))
+             (or (topic-summary-last-posted-at t) ""))))))
 
 (define-rpc (topic-open [id String] : (List (List String)))
   (rows-or-notify
