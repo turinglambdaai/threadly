@@ -62,7 +62,10 @@ rivet::windows::RacketRuntimeConfig runtime_config() {
 
 std::string narrow(winrt::hstring const& text) { return winrt::to_string(text); }
 
-std::wstring wide(std::string const& text) { return winrt::to_hstring(text); }
+std::wstring wide(std::string const& text) {
+  auto const h = winrt::to_hstring(text);
+  return std::wstring(h.c_str());
+}
 
 std::string escape_html(std::string const& text) {
   std::string out;
@@ -201,6 +204,7 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
                           [weak, message] {
                             if (auto w = weak.get()) w->SetStatus(message);
                           });
+                    }
                   }
                 } catch (...) {
                   // Unknown events are forward-compat; ignore.
