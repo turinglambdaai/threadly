@@ -5,6 +5,16 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.5.0 - 2026-10-12
+
+Category navigation reaches every desktop.
+
+### Added
+- Windows and Linux hosts join the Discourse information architecture: a
+  category picker (ComboBox / GtkDropDown) above the topic list serves
+  per-category topic pages, with Back and Refresh respecting the current
+  scope, matching the macOS sidebar.
+
 ## 0.4.1 - 2026-10-12
 
 Fixes the macOS self-update install: the eager temp-directory cleanup ran
