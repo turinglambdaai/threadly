@@ -32,6 +32,9 @@ struct MainWindow : MainWindowT<MainWindow> {
                        winrt::Windows::Foundation::IInspectable const& args);
   void CheckForUpdates_Click(winrt::Windows::Foundation::IInspectable const& sender,
                              Microsoft::UI::Xaml::RoutedEventArgs const& args);
+  void CategoryPicker_SelectionChanged(
+      winrt::Windows::Foundation::IInspectable const& sender,
+      winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& args);
 
  private:
   struct TopicRow {
@@ -41,6 +44,9 @@ struct MainWindow : MainWindowT<MainWindow> {
 
   winrt::fire_and_forget InitializeBackendAsync();
   void LoadLatest(bool fresh);
+  void LoadCategory(std::wstring const& slug, std::int64_t id,
+                    std::wstring const& name);
+  void RefreshCategoryPicker();
   void RunSearch(std::string const& query);
   void OpenTopic(std::int64_t id);
   void ApplyRows(std::vector<std::vector<std::string>> const& rows,
@@ -77,9 +83,14 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::shared_ptr<rivet::windows::Backend> backend_;
   std::vector<TopicRow> topics_;
   std::map<std::int64_t, std::pair<std::wstring, std::wstring>> categories_;
+  // Ordered category registry (id, name, slug) in the forum's own order;
+  // the picker's index maps to this minus one (0 = Latest).
+  std::vector<std::tuple<std::int64_t, std::wstring, std::wstring>> category_order_;
   winrt::Microsoft::UI::Xaml::Controls::WebView2 reader_{nullptr};
+  std::wstring pending_scope_title_;
   bool search_active_{false};
   bool suppress_selection_{false};
+  bool suppress_category_{false};
   bool update_downloading_{false};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer check_timer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer update_timer_{nullptr};

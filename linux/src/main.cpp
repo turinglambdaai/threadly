@@ -45,6 +45,7 @@ struct TopicRow {
 
 struct Category {
   std::string name;
+  std::string slug;
   std::string color;  // bare hex from the forum, e.g. "0088CC"
 };
 
@@ -55,6 +56,8 @@ struct AppState {
   GtkSearchEntry* search{nullptr};
   GtkButton* back_button{nullptr};
   GtkButton* refresh_button{nullptr};
+  GtkDropDown* category_picker{nullptr};
+  GtkLabel* scope_heading{nullptr};
   GtkListBox* topic_list{nullptr};
   GtkStack* reader{nullptr};
   WebKitWebView* web_view{nullptr};
@@ -71,8 +74,12 @@ struct AppState {
 
   std::vector<TopicRow> topics;
   std::map<std::int64_t, Category> categories;
+  // Ordered (id, name, slug) in the forum's own order; the drop-down's
+  // selected index maps to this minus one (0 = Latest).
+  std::vector<std::tuple<std::int64_t, std::string, std::string>> category_order;
   bool search_active{false};
   bool suppress_row_signal{false};
+  bool suppress_category_signal{false};
   // Drops completions from superseded loads; every load bumps it.
   std::uint64_t generation{0};
 };
@@ -286,6 +293,8 @@ void apply_rows(std::vector<TopicRow> rows, bool const search_mode) {
   g_state.suppress_row_signal = false;
 }
 
+void update_scope_heading();
+
 // ---- completion plumbing -----------------------------------------------------------
 
 using RowsResultPayload = std::pair<std::uint64_t, rivet_app::Result<Rows>>;
@@ -322,6 +331,7 @@ void apply_result(std::uint64_t const generation, Rows& rows,
   }
 
   apply_rows(std::move(parsed), g_state.search_active);
+  update_scope_heading();
   gtk_widget_set_visible(GTK_WIDGET(g_state.back_button),
                          g_state.search_active ? TRUE : FALSE);
   status_show("");
@@ -359,16 +369,25 @@ int on_categories_delivered(gpointer user_data) {
   std::unique_ptr<rivet_app::Result<Rows>> result(
       static_cast<rivet_app::Result<Rows>*>(user_data));
   try {
+    g_state.suppress_category_signal = true;
+    auto* model = GTK_STRING_LIST(gtk_drop_down_get_model(g_state.category_picker));
+    gtk_string_list_append(model, "Latest");
     for (auto const& row : result->get()) {
       // category row = (id name slug color)
-      if (row.size() < 2) continue;
+      if (row.size() < 3) continue;
+      auto const id = std::strtoll(row[0].c_str(), nullptr, 10);
       Category category;
       category.name = row[1];
+      category.slug = row[2];
       if (row.size() >= 4) category.color = row[3];
-      g_state.categories[std::strtoll(row[0].c_str(), nullptr, 10)] =
-          std::move(category);
+      g_state.categories[id] = category;
+      g_state.category_order.emplace_back(id, row[1], row[2]);
+      gtk_string_list_append(model, row[1].c_str());
     }
+    g_state.suppress_category_signal = false;
+    gtk_drop_down_set_selected(g_state.category_picker, 0);
   } catch (...) {
+    g_state.suppress_category_signal = false;
     // Category names are decoration; a failure here never blocks browsing.
   }
   return G_SOURCE_REMOVE;
@@ -393,6 +412,43 @@ int on_posts_delivered(gpointer user_data) {
 
 // ---- actions -------------------------------------------------------------------------
 
+// Drop-down navigation: 0 = Latest, n = category_order[n-1].
+void on_picker_selected(GtkDropDown* dropdown, GParamSpec*, gpointer) {
+  if (g_state.suppress_category_signal) return;
+  auto const selected = gtk_drop_down_get_selected(dropdown);
+  if (selected == GTK_INVALID_LIST_POSITION || selected == 0) {
+    if (g_state.search_active ||
+        !g_state.category_order.empty()) {
+      load_latest(false);
+    }
+    return;
+  }
+  auto const slot = selected - 1;
+  if (slot < g_state.category_order.size()) {
+    auto const [id, name, slug] = g_state.category_order[slot];
+    load_category(id, slug);
+  }
+}
+
+void update_scope_heading() {
+  if (g_state.scope_heading == nullptr) return;
+  std::string title;
+  if (g_state.search_active) {
+    title = "Search results";
+  } else if (g_state.category_order.empty()) {
+    title = "Latest";
+  } else {
+    auto const selected = gtk_drop_down_get_selected(g_state.category_picker);
+    if (selected == GTK_INVALID_LIST_POSITION || selected == 0) {
+      title = "Latest";
+    } else {
+      title = std::get<1>(g_state.category_order[selected - 1]);
+    }
+  }
+  gtk_label_set_markup(g_state.scope_heading,
+                       ("<b>" + escape_markup(title) + "</b>").c_str());
+}
+
 void load_latest(bool const fresh) {
   if (g_state.api == nullptr) return;
   g_state.generation += 1;
@@ -403,10 +459,27 @@ void load_latest(bool const fresh) {
         g_idle_add(on_rows_delivered,
                    wrap_result(g_state.generation, std::move(result)));
       });
-  (void)g_state.api->categories_list_async([](rivet_app::Result<Rows> result) {
-    g_idle_add(on_categories_delivered,
-               new rivet_app::Result<Rows>(std::move(result)));
-  });
+  // Categories load once; later refreshes reuse the drop-down contents.
+  if (g_state.category_order.empty()) {
+    (void)g_state.api->categories_list_async([](rivet_app::Result<Rows> result) {
+      g_idle_add(on_categories_delivered,
+                 new rivet_app::Result<Rows>(std::move(result)));
+    });
+  }
+}
+
+// A category page; same row shape as latest.
+void load_category(std::int64_t const id, std::string const& slug) {
+  if (g_state.api == nullptr) return;
+  g_state.generation += 1;
+  g_state.search_active = false;
+  reader_loading();
+  (void)g_state.api->category_topics_list_async(
+      slug, std::to_string(id),
+      [](rivet_app::Result<Rows> result) mutable {
+        g_idle_add(on_rows_delivered,
+                   wrap_result(g_state.generation, std::move(result)));
+      });
 }
 
 void run_search(std::string const& query) {
@@ -459,6 +532,11 @@ void on_search_changed(GtkSearchEntry* entry, gpointer) {
 
 void on_back_clicked(GtkButton*, gpointer) {
   gtk_editable_set_text(GTK_EDITABLE(g_state.search), "");
+  if (gtk_drop_down_get_selected(g_state.category_picker) != 0) {
+    g_state.suppress_category_signal = true;
+    gtk_drop_down_set_selected(g_state.category_picker, 0);
+    g_state.suppress_category_signal = false;
+  }
   load_latest(false);
 }
 
@@ -617,6 +695,7 @@ GtkWidget* build_sidebar() {
   gtk_widget_set_visible(back, FALSE);
   auto* heading = gtk_label_new(nullptr);
   gtk_label_set_markup(GTK_LABEL(heading), "<b>Latest</b>");
+  g_state.scope_heading = GTK_LABEL(heading);
   gtk_widget_set_halign(heading, GTK_ALIGN_START);
   gtk_widget_set_hexpand(heading, TRUE);
   auto* refresh = gtk_button_new_from_icon_name("view-refresh-symbolic");
@@ -626,6 +705,13 @@ GtkWidget* build_sidebar() {
   gtk_box_append(GTK_BOX(header), refresh);
   g_state.back_button = GTK_BUTTON(back);
   g_state.refresh_button = GTK_BUTTON(refresh);
+
+  // Discourse category navigation: a drop-down whose index 0 is Latest
+  // and whose remaining entries are the forum's categories in order.
+  auto* picker_model = gtk_string_list_new(nullptr);
+  gtk_string_list_append(picker_model, "Latest");
+  auto* picker = gtk_drop_down_new(G_LIST_MODEL(picker_model), nullptr);
+  gtk_widget_set_hexpand(picker, TRUE);
 
   auto* search = gtk_search_entry_new();
   // GtkSearchEntry exposes "placeholder-text" as a property (setter
@@ -644,15 +730,19 @@ GtkWidget* build_sidebar() {
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), list);
 
   gtk_box_append(GTK_BOX(box), header);
+  gtk_box_append(GTK_BOX(box), picker);
   gtk_box_append(GTK_BOX(box), search);
   gtk_box_append(GTK_BOX(box), scrolled);
 
   g_state.search = GTK_SEARCH_ENTRY(search);
   g_state.topic_list = GTK_LIST_BOX(list);
+  g_state.category_picker = GTK_DROP_DOWN(picker);
   g_signal_connect(g_state.back_button, "clicked",
                    G_CALLBACK(on_back_clicked), nullptr);
   g_signal_connect(g_state.refresh_button, "clicked",
                    G_CALLBACK(on_refresh_clicked), nullptr);
+  g_signal_connect(picker, "notify::selected",
+                   G_CALLBACK(on_picker_selected), nullptr);
   return box;
 }
 

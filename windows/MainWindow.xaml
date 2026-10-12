@@ -19,6 +19,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
@@ -35,9 +36,11 @@
                     <Button Grid.Column="3" Content="&#xE72C;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="Refresh" Click="Refresh_Click" />
                 </Grid>
 
-                <TextBox Grid.Row="1" x:Name="SearchBox" PlaceholderText="Search the archive (Enter)" KeyDown="SearchBox_KeyDown" IsEnabled="False" />
+                <ComboBox Grid.Row="1" x:Name="CategoryPicker" HorizontalAlignment="Stretch" SelectionChanged="CategoryPicker_SelectionChanged" IsEnabled="False" PlaceholderText="Latest" />
 
-                <ListView Grid.Row="2" x:Name="Topics" SelectionMode="Single" SelectionChanged="Topics_SelectionChanged" IsEnabled="False">
+                <TextBox Grid.Row="2" x:Name="SearchBox" PlaceholderText="Search the archive (Enter)" KeyDown="SearchBox_KeyDown" IsEnabled="False" />
+
+                <ListView Grid.Row="3" x:Name="Topics" SelectionMode="Single" SelectionChanged="Topics_SelectionChanged" IsEnabled="False">
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="x:String">
                             <TextBlock Text="{x:Bind}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" Margin="0,4" />

@@ -240,6 +240,7 @@ void MainWindow::LoadLatest(bool const fresh) {
     return;
   }
   search_active_ = false;
+  pending_scope_title_.clear();
   SearchBox().IsEnabled(false);
   try {
     rivet_app::API api(*backend);
@@ -262,13 +263,17 @@ void MainWindow::LoadLatest(bool const fresh) {
       dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
         if (auto window = weak.get()) {
           try {
+            window->category_order_.clear();
             for (auto const& row : result.get()) {
               // category row = (id name slug color)
-              if (row.size() < 2) continue;
+              if (row.size() < 3) continue;
               auto const id = std::strtoll(row[0].c_str(), nullptr, 10);
               window->categories_[id] = {wide(row[1]),
                                          row.size() >= 4 ? wide(row[3]) : L""};
+              window->category_order_.push_back(
+                  {id, wide(row[1]), wide(row[2])});
             }
+            window->RefreshCategoryPicker();
           } catch (...) {
             // Category names are decoration; a failure never blocks browsing.
           }
@@ -278,6 +283,68 @@ void MainWindow::LoadLatest(bool const fresh) {
   } catch (std::exception const& e) {
     SetErrorUi(e.what());
     SearchBox().IsEnabled(true);
+  }
+}
+
+void MainWindow::RefreshCategoryPicker() {
+  suppress_category_ = true;
+  auto items = CategoryPicker().Items();
+  items.Clear();
+  items.Append(winrt::box_value(winrt::hstring(L"Latest")));
+  for (auto const& [id, name, slug] : category_order_) {
+    items.Append(winrt::box_value(name));
+  }
+  suppress_category_ = false;
+  CategoryPicker().IsEnabled(true);
+  CategoryPicker().SelectedIndex(0);
+}
+
+void MainWindow::CategoryPicker_SelectionChanged(
+    winrt::Windows::Foundation::IInspectable const&,
+    winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&) {
+  if (suppress_category_) return;
+  auto const index = CategoryPicker().SelectedIndex();
+  if (index <= 0) {
+    if (search_active_ || SidebarTitle().Text() != L"Latest") {
+      SearchBox().Text(L"");
+      LoadLatest(false);
+    }
+    return;
+  }
+  auto const slot = static_cast<std::size_t>(index - 1);
+  if (slot >= category_order_.size()) return;
+  auto const [id, name, slug] = category_order_[slot];
+  LoadCategory(slug, id, name);
+}
+
+void MainWindow::LoadCategory(std::wstring const& slug, std::int64_t const id,
+                              std::wstring const& name) {
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) {
+    SetErrorUi("Racket backend is not running");
+    return;
+  }
+  search_active_ = false;
+  pending_scope_title_ = name;
+  try {
+    rivet_app::API api(*backend);
+    auto const dispatcher = DispatcherQueue();
+    auto const weak = get_weak();
+    (void)api.category_topics_list_async(
+        narrow(slug), std::to_string(id),
+        [dispatcher, weak](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+          dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
+            if (auto window = weak.get()) {
+              try {
+                window->ApplyRows(result.get(), false);
+              } catch (std::exception const& e) {
+                window->SetErrorUi(e.what());
+              }
+            }
+          });
+        });
+  } catch (std::exception const& e) {
+    SetErrorUi(e.what());
   }
 }
 
@@ -388,7 +455,9 @@ void MainWindow::ApplyRows(
   suppress_selection_ = true;
   Topics().ItemsSource(items);
   suppress_selection_ = false;
-  SidebarTitle().Text(searchMode ? L"Search results" : L"Latest");
+  SidebarTitle().Text(searchMode ? L"Search results"
+                                 : (pending_scope_title_.empty() ? L"Latest"
+                                                                 : pending_scope_title_));
   BackButton().Visibility(searchMode ? winrt::Microsoft::UI::Xaml::Visibility::Visible : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
   SetReadyUi();
   // Auto-open the first row so the reader never sits empty.
@@ -417,13 +486,23 @@ void MainWindow::Topics_SelectionChanged(
 void MainWindow::Back_Click(winrt::Windows::Foundation::IInspectable const&,
                             Microsoft::UI::Xaml::RoutedEventArgs const&) {
   SearchBox().Text(L"");
-  LoadLatest(false);
+  if (CategoryPicker().SelectedIndex() != 0) {
+    CategoryPicker().SelectedIndex(0);
+  } else {
+    LoadLatest(false);
+  }
 }
 
 void MainWindow::Refresh_Click(winrt::Windows::Foundation::IInspectable const&,
                                Microsoft::UI::Xaml::RoutedEventArgs const&) {
   if (search_active_) {
     Back_Click(nullptr, nullptr);
+  } else if (CategoryPicker().SelectedIndex() > 0) {
+    auto const slot = static_cast<std::size_t>(CategoryPicker().SelectedIndex() - 1);
+    if (slot < category_order_.size()) {
+      auto const [id, name, slug] = category_order_[slot];
+      LoadCategory(slug, id, name);
+    }
   } else {
     LoadLatest(true);
   }
