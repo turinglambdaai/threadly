@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import RivetRuntime
 
@@ -63,6 +64,15 @@ final class ThreadlyStore: ObservableObject {
         switch event {
         case .notify(let message):
             statusLine = message
+        case .update_available(let version):
+            // fired by the backend's update-check RPC (Windows/CLI path);
+            // the macOS host checks natively via UpdateService
+            statusLine = "Update \(version) is available."
+        case .open_url(let url):
+            // backend-driven link (open-releases RPC); opens in the browser
+            if let u = URL(string: url) {
+                NSWorkspace.shared.open(u)
+            }
         }
     }
 

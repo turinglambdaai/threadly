@@ -29,10 +29,29 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Bottom strip: backend failures surface here (notify events), quiet
-    /// when everything is fine.
+    /// Bottom strip: update banner when one is available, backend failures
+    /// surface here too (notify events), quiet when everything is fine.
     private var statusBar: some View {
-        Group {
+        VStack(spacing: 0) {
+            if let manifest = model.pendingUpdateManifest {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .foregroundStyle(DesignTokens.accent)
+                    Text("Threadly \(manifest.version) is available.")
+                        .font(.callout)
+                    Button("Install and Relaunch") {
+                        Task { await model.installUpdate(manifest) }
+                    }
+                    .controlSize(.small)
+                    Button("Not now") { model.updateOutcome = nil }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(DesignTokens.accentSoft)
+            }
             if store.statusLine.isEmpty == false {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")

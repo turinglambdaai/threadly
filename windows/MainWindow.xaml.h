@@ -29,6 +29,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                      Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void StatusBar_Close(winrt::Windows::Foundation::IInspectable const& sender,
                        winrt::Windows::Foundation::IInspectable const& args);
+  void CheckForUpdates_Click(winrt::Windows::Foundation::IInspectable const& sender,
+                             Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
  private:
   struct TopicRow {
@@ -45,8 +47,31 @@ struct MainWindow : MainWindowT<MainWindow> {
   void SetReadyUi();
   void SetErrorUi(std::string const& message);
   void SetStatus(std::string const& message);
+  void SetUpdateStatus(std::wstring const& message);
   winrt::fire_and_forget CreateReaderAsync();
   winrt::Microsoft::UI::Xaml::Controls::WebView2 Reader();
+
+  // Online update flow (MainWindow.Update.cpp)
+  void StartAutoUpdateCheck();
+  void RunSilentUpdateCheck();
+  void RunUpdateCheck(bool silent);
+  void HandleUpdateCheckResult(bool ok,
+                               rivet_app::UpdateCheck const& check,
+                               std::string const& failure, bool silent);
+  void StartDownload();
+  void PollUpdateState(std::shared_ptr<rivet::windows::Backend> const& backend);
+  void HandleUpdatePoll(std::optional<rivet_app::UpdateState> const& state);
+  void StopUpdateTimer();
+  void FailDownload(std::string const& message);
+  void ShowInstallConsent(std::wstring const& path);
+  void InstallDownloadedUpdate(std::wstring const& zip_path);
+  void HandleInstallMarkers();
+  bool IsDevCopy();
+  bool IsMsiInstall();
+  void ShowUpdateDialog(std::wstring const& title, std::wstring const& body,
+                        std::wstring const& primary_button,
+                        std::wstring const& close_button,
+                        std::function<void()> on_primary);
 
   std::shared_ptr<rivet::windows::Backend> backend_;
   std::vector<TopicRow> topics_;
@@ -54,6 +79,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::Microsoft::UI::Xaml::Controls::WebView2 reader_{nullptr};
   bool search_active_{false};
   bool suppress_selection_{false};
+  bool update_downloading_{false};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer check_timer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer update_timer_{nullptr};
 };
 
 }  // namespace winrt::RivetHost::implementation

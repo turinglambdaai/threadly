@@ -18,6 +18,9 @@ struct ThreadlyApp: App {
         }
         .commands {
             CommandGroup(after: .newItem) {
+                Button("Check for Updates…") { model.checkForUpdates(manual: true) }
+                    .keyboardShortcut("u")
+                Divider()
                 Button("Refresh") { model.store.refresh() }
                     .keyboardShortcut("r", modifiers: [.command])
             }
@@ -31,9 +34,38 @@ struct ThreadlyApp: App {
 final class AppModel: ObservableObject {
     @Published var ready = false
     @Published var bootStatus = "Starting engine…"
+    @Published var updateOutcome: Result<UpdateService.CheckResult, Error>?
+
+    var pendingUpdateManifest: UpdateService.Manifest? {
+        if case .success(.available(let m)) = updateOutcome {
+            return m
+        }
+        return nil
+    }
 
     let store = ThreadlyStore()
+    let updateService = UpdateService()
     private var backend: EmbeddedRacketBackend?
+
+    func checkForUpdates(manual: Bool) {
+        Task {
+            let outcome = await updateService.check(manual: manual)
+            await MainActor.run { self.updateOutcome = outcome }
+            if case .failure(let error) = outcome, manual {
+                await MainActor.run {
+                    self.store.statusLine = "Update check failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    func installUpdate(_ manifest: UpdateService.Manifest) async {
+        do {
+            try await updateService.downloadAndInstall(manifest)
+        } catch {
+            store.statusLine = "Install failed: \(error.localizedDescription)"
+        }
+    }
 
     func start() {
         guard backend == nil else { return }
@@ -81,6 +113,18 @@ final class AppModel: ObservableObject {
         bootStatus = "Ready"
         await store.loadCategories()
         await store.loadLatest()
+        silentUpdateCheck()
+    }
+
+    /// Launch-time check: throttled to once per 4 hours inside the service;
+    /// only an available update surfaces, never a failure.
+    private func silentUpdateCheck() {
+        Task {
+            let outcome = await updateService.check(manual: false)
+            if case .success(.available) = outcome {
+                await MainActor.run { self.updateOutcome = outcome }
+            }
+        }
     }
 
     private static func runtimeConfiguration() throws -> EmbeddedRacketConfiguration {

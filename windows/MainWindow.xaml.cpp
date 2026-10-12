@@ -212,6 +212,7 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
                 }
               });
           window->LoadLatest(false);
+          window->StartAutoUpdateCheck();
         } catch (std::exception const& e) {
           window->SetErrorUi(e.what());
         }
@@ -431,6 +432,21 @@ void MainWindow::Refresh_Click(winrt::Windows::Foundation::IInspectable const&,
 void MainWindow::StatusBar_Close(winrt::Windows::Foundation::IInspectable const&,
                                  winrt::Windows::Foundation::IInspectable const&) {
   StatusBar().IsOpen(false);
+}
+
+void MainWindow::SetUpdateStatus(std::wstring const& message) {
+  if (message.empty()) {
+    StatusBar().IsOpen(false);
+    return;
+  }
+  StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational);
+  StatusBar().Message(winrt::hstring(message));
+  StatusBar().IsOpen(true);
+}
+
+void MainWindow::CheckForUpdates_Click(winrt::Windows::Foundation::IInspectable const&,
+                                       Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  RunUpdateCheck(/*silent=*/false);
 }
 
 void MainWindow::SetReadyUi() {

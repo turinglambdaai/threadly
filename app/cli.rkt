@@ -16,7 +16,8 @@
          "core/cache.rkt"
          "core/discourse.rkt"
          "core/paths.rkt"
-         "version.rkt")
+         "version.rkt"
+         (prefix-in upd: "update.rkt"))
 
 ;; ---- argument parsing -------------------------------------------------------
 
@@ -131,6 +132,19 @@
            0))
      (displayln (format "cache:    ~a entrie~a" entries (if (= entries 1) "y" "s")))]))
 
+;; verify the signed feed and report; never raises
+(define (cmd-update-check)
+  (define result
+    (with-handlers ([exn:fail? (lambda (e) (list 'failed (exn-message e)))])
+      (upd:update-check-result app-version)))
+  (match result
+    [(list 'available version)
+     (displayln (format "update available: ~a (current ~a)" version app-version))]
+    [(list 'up-to-date) (displayln "up to date")]
+    [(list 'unavailable reason) (displayln (format "unavailable: ~a" reason))]
+    [(list 'failed reason) (displayln (format "check failed: ~a" reason))]
+    [_ (displayln "unknown result")]))
+
 ;; ---- entry ------------------------------------------------------------------
 
 (define (main args)
@@ -154,6 +168,7 @@
             [(list q) (cmd-search q json?)]
             [_ (displayln (usage) (current-error-port)) (exit 2)])]
          ["categories" (cmd-categories json?)]
+         ["update-check" (cmd-update-check)]
          ["doctor" (cmd-doctor)]
          [_ (displayln (format "threadly: unknown command: ~a\n\n~a" command (usage))
                             (current-error-port))

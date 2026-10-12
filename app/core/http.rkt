@@ -6,6 +6,7 @@
 ;; would otherwise surface the redirect page as the body.
 
 (require net/http-client
+         racket/file
          racket/format
          racket/list
          racket/port
@@ -18,7 +19,8 @@
          header-value
          headers->strings
          http-get-bytes
-         http-get-string)
+         http-get-string
+         http-download-file)
 
 (define http-user-agent
   (format "Threadly/~a (+https://github.com/turinglambdaai/threadly)" app-version))
@@ -64,6 +66,10 @@
   (define m (regexp-match #px"HTTP/[0-9.]+ +([0-9]+)" s))
   (and m (string->number (second m))))
 
+(define (content-length-or-#f headers)
+  (define v (header-value headers "content-length"))
+  (and v (string->number (string-trim v))))
+
 ;; One request, no redirects. → (values status headers body-bytes)
 ;; Bodies are read to EOF with Connection: close.
 (define (request-once url-string headers)
@@ -98,3 +104,60 @@
 (define (http-get-string url-string)
   (define-values (code headers body) (http-get-bytes url-string))
   (values code headers (bytes->string/utf-8 body)))
+
+;; Stream a download to dest-path. on-progress is called as
+;; (on-progress done-bytes total-bytes-or-#f) at most every 256 KiB.
+;; Returns (values code bytes-written). Raises on network failure only;
+;; non-200 responses still write nothing and return the code.
+(define (http-download-file url-string dest-path [on-progress (lambda (_a _b) (void))])
+  ;; release assets answer with a 30x to their CDN — chase up to 5 hops,
+  ;; mirroring http-get-bytes
+  (let download-loop ([url url-string] [hops 0])
+    (define-values (ssl? host port path) (split-url url-string))
+    (define conn (http-conn-open host #:ssl? ssl? #:port port))
+    (define-values (status resp-headers body-port)
+      (http-conn-sendrecv! conn path
+                           #:method "GET"
+                           #:headers (list (format "User-Agent: ~a" http-user-agent)
+                                           "Accept: */*"
+                                           "Connection: close")))
+    (define code (status-code status))
+    (define resp-headers-strs (headers->strings resp-headers))
+    (cond
+      [(and (member code '(301 302 303 307 308)) (< hops 5))
+       (define location (header-value resp-headers-strs "location"))
+       (close-input-port body-port)
+       (unless location
+         (error 'http-download-file "redirect without Location from ~a" url))
+       (download-loop location (add1 hops))]
+      [else
+       (download-into! conn code resp-headers-strs body-port dest-path on-progress)])))
+
+(define (download-into! conn code resp-headers-strs body-port dest-path on-progress)
+  (define total (content-length-or-#f resp-headers-strs))
+  (define written 0)
+  (define last-reported 0)
+  (if (not (= code 200))
+      (begin (close-input-port body-port)
+             (with-handlers ([exn:fail? void]) (http-conn-close! conn))
+             (values code 0))
+      (begin
+        ;; binary mode is load-bearing: a text-mode port on Windows turns
+        ;; every 0x0A into 0x0D 0x0A, which would corrupt downloads (update
+        ;; archives) and fail every byte-exact checksum
+        (with-output-to-file dest-path
+          (lambda ()
+            (let copy ([chunk (read-bytes 262144 body-port)])
+              (unless (eof-object? chunk)
+                (write-bytes chunk)
+                (set! written (+ written (bytes-length chunk)))
+                (when (or (>= (- written last-reported) 262144)
+                          (and total (>= written total)))
+                  (set! last-reported written)
+                  (on-progress written total))
+                (copy (read-bytes 262144 body-port)))))
+          #:exists 'truncate
+          #:mode 'binary)
+        (close-input-port body-port)
+        (with-handlers ([exn:fail? void]) (http-conn-close! conn))
+        (values code written))))
