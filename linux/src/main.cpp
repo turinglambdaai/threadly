@@ -6,7 +6,8 @@
 // widgets. A generation counter drops completions from superseded loads
 // (refresh during an in-flight search, topic switch during a slow fetch).
 #include <gtk/gtk.h>
-#include <webkit/WebKit.h>
+// webkitgtk 6.0 ships a lowercase umbrella header.
+#include <webkit/webkit.h>
 
 #include <atomic>
 #include <cstdint>
