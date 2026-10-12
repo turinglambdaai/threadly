@@ -190,6 +190,15 @@ private struct SidebarView: View {
                         TopicListRow(topic: topic, searchResult: false)
                             .tag(SidebarItem.topic(topic.id))
                     }
+                    if store.displayTopics.isEmpty {
+                        Text(store.loadingTopics
+                             ? "Loading…"
+                             : (scopeTitle == "Uncategorized"
+                                ? "No topics — the forum keeps this category empty."
+                                : "No topics here yet."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -211,17 +220,6 @@ private struct SidebarView: View {
         }
         .onChange(of: store.scope) { _, newScope in
             Task { await store.load(scope: newScope) }
-        }
-        .overlay {
-            if store.loadingTopics && store.displayTopics.isEmpty {
-                ProgressView("Loading topics…")
-            } else if store.displayTopics.isEmpty {
-                ContentUnavailableView(
-                    "No topics",
-                    systemImage: "text.bubble",
-                    description: Text("The forum returned no topics.")
-                )
-            }
         }
     }
 
@@ -326,6 +324,12 @@ private struct DetailView: View {
         Group {
             if let topic = store.selectedTopic {
                 topicDetail(topic)
+            } else if store.displayTopics.isEmpty && !store.loadingTopics {
+                ContentUnavailableView(
+                    "Nothing here yet",
+                    systemImage: "tray",
+                    description: Text("This view has no topics right now. Pick another category, or search the archive.")
+                )
             } else {
                 ContentUnavailableView(
                     "Select a topic",
