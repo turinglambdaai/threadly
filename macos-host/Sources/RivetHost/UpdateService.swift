@@ -239,7 +239,9 @@ struct UpdateService {
         let workDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("threadly-update-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: workDir) }
+        // No defer-cleanup here: the swap script moves the unpacked bundle
+        // out of workDir AFTER this process exits, and cleans up workDir
+        // itself. Deleting eagerly would race the script and roll back.
 
         let zipURL = workDir.appendingPathComponent("threadly-update.zip")
         let (bytes, response) = try await session(from: sessionConfiguration).bytes(from: artifact.url)
@@ -287,6 +289,7 @@ struct UpdateService {
         // Atomic swap with rollback, executed after this process exits.
         let bundle = bundleURL.path
         let newBundlePath = newBundle.path
+        let workDirPath = workDir.path
         let q: (String) -> String = { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }
         let script = """
         #!/bin/bash
@@ -295,7 +298,7 @@ struct UpdateService {
         if mv \(q(bundle)) \(q(bundle)).old; then
           if mv \(q(newBundlePath)) \(q(bundle)); then
             open \(q(bundle))
-            rm -rf \(q(bundle)).old
+            rm -rf \(q(workDirPath))
             exit 0
           fi
           mv \(q(bundle)).old \(q(bundle))

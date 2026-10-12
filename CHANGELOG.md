@@ -5,6 +5,14 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.4.1 - 2026-10-12
+
+Fixes the macOS self-update install: the eager temp-directory cleanup ran
+while the background swap script was still moving the unpacked bundle
+into place, so every install silently rolled back to the old version.
+The swap script now cleans up its own work directory after the new bundle
+is in place.
+
 ## 0.4.0 - 2026-10-12
 
 The forum's own navigation: categories are now first-class.
