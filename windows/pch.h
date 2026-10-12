@@ -20,8 +20,9 @@
 #include <winrt/Microsoft.UI.Xaml.Controls.Primitives.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Microsoft.UI.Xaml.Markup.h>
-#include <winrt/Microsoft.Web.WebView2.Core.h>
-#include <winrt/Microsoft.Web.WebView2.Controls.h>
+// The WinUI 3 WebView2 control lives in Microsoft.UI.Xaml.Controls
+// (Windows App SDK); the Microsoft.Web.WebView2 NuGet supplies the loader
+// and CoreWebView2. No WebView2 projection headers are shipped pre-parsed.
 
 #include <atomic>
 #include <cstdint>

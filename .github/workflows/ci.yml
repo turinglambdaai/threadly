@@ -105,6 +105,11 @@ jobs:
       # RIVET_RACKET_* for the CMake host build.
       - name: Set up embeddable Racket CS
         uses: ./rivet/.github/actions/setup-embed-racket
+      # The source-built minimal runtime ships without the packages that
+      # provide `raco make` (compiler-lib) and `raco ctool` (cext-lib), which
+      # `raco rivet build` drives to compile the backend.
+      - name: Install raco commands into the embeddable runtime
+        run: raco pkg install --auto --no-docs compiler-lib cext-lib
       - name: Build host
         run: raco rivet build
       - name: Headless boot smoke
