@@ -33,6 +33,7 @@ pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET gio-2.0)
 # The reader pane renders the forum's cooked HTML in WebKitGTK — the GTK4
 # build is the webkitgtk-6.0 pkg-config module (libsoup3).
 pkg_check_modules(WEBKIT REQUIRED IMPORTED_TARGET webkitgtk-6.0)
+message(STATUS "WebKitGTK include dirs: ${WEBKIT_INCLUDE_DIRS}")
 # The Secret Service adapter is compiled whenever libsecret is present; the
 # capability then reports itself at runtime based on service availability.
 pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
@@ -63,6 +64,7 @@ endif()
 
 target_include_directories(RivetHost PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}"
+  ${WEBKIT_INCLUDE_DIRS}
   "${RIVET_ROOT}/platform/linux/runtime"
   "${RIVET_ROOT}/platform/linux/system"
   "${RIVET_ROOT}/platform/linux/theme"

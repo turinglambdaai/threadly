@@ -44,7 +44,7 @@
                 </ListView>
             </Grid>
 
-            <WebView2 Grid.Column="1" x:Name="Reader" />
+            <ContentControl Grid.Column="1" x:Name="ReaderHost" />
 
             <ProgressRing Grid.Column="1" x:Name="Loading" Width="44" Height="44" IsActive="True" Visibility="Collapsed" />
         </Grid>

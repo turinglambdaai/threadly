@@ -45,15 +45,15 @@ struct MainWindow : MainWindowT<MainWindow> {
   void SetReadyUi();
   void SetErrorUi(std::string const& message);
   void SetStatus(std::string const& message);
-  bool EnsureReaderAsyncStarted();
-  winrt::fire_and_forget EnsureReaderAsync();
+  winrt::fire_and_forget CreateReaderAsync();
+  winrt::Microsoft::UI::Xaml::Controls::WebView2 Reader();
 
   std::shared_ptr<rivet::windows::Backend> backend_;
   std::vector<TopicRow> topics_;
   std::map<std::int64_t, std::pair<std::wstring, std::wstring>> categories_;
+  winrt::Microsoft::UI::Xaml::Controls::WebView2 reader_{nullptr};
   bool search_active_{false};
   bool suppress_selection_{false};
-  bool reader_started_{false};
 };
 
 }  // namespace winrt::RivetHost::implementation

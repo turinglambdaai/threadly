@@ -152,9 +152,10 @@ aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding
 MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Threadly");
-  // The reader needs CoreWebView2 before NavigateToString; kick the async
-  // init now so the first topic render never races it.
-  EnsureReaderAsyncStarted();
+  // The WebView2 control is created in code, not XAML: a missing loader or
+  // runtime must degrade to "reader unavailable" instead of crashing the
+  // XAML parse and taking the whole app down.
+  CreateReaderAsync();
   // Ordinary window close and OS session end (logoff/shutdown) both funnel
   // into the same orderly backend stop. The console-control callback runs
   // on its own thread, so it only touches the thread-safe stop() — never
@@ -333,7 +334,12 @@ void MainWindow::OpenTopic(std::int64_t const id) {
               window->Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
               try {
                 auto const document = reader_document(result.get());
-                window->Reader().NavigateToString(winrt::to_hstring(document));
+                if (auto const reader = window->reader_) {
+                  reader.NavigateToString(winrt::to_hstring(document));
+                } else {
+                  window->SetErrorUi(
+                      "Reader unavailable; open the thread on the forum");
+                }
               } catch (std::exception const& e) {
                 window->SetErrorUi(e.what());
               }
@@ -448,23 +454,27 @@ void MainWindow::SetStatus(std::string const& message) {
   StatusBar().IsOpen(true);
 }
 
-bool MainWindow::EnsureReaderAsyncStarted() {
-  if (reader_started_) return false;
-  reader_started_ = true;
-  EnsureReaderAsync();
-  return true;
+winrt::Microsoft::UI::Xaml::Controls::WebView2 MainWindow::Reader() {
+  return reader_;
 }
 
-winrt::fire_and_forget MainWindow::EnsureReaderAsync() {
+winrt::fire_and_forget MainWindow::CreateReaderAsync() {
   auto const weak = get_weak();
   try {
-    co_await Reader().EnsureCoreWebView2Async();
-  } catch (...) {
-    // WebView2 runtime missing: the reader stays blank but the app runs.
+    winrt::Microsoft::UI::Xaml::Controls::WebView2 webview;
+    ReaderHost().Content(webview);
+    co_await webview.EnsureCoreWebView2Async();
     if (auto window = weak.get()) {
-      window->SetErrorUi("WebView2 runtime unavailable; cannot render threads");
+      window->reader_ = webview;
+    }
+  } catch (std::exception const& e) {
+    if (auto window = weak.get()) {
+      window->SetErrorUi(std::string{"Reader unavailable: "} + e.what());
+    }
+  } catch (...) {
+    if (auto window = weak.get()) {
+      window->SetErrorUi("WebView2 runtime unavailable; the reader is disabled");
     }
   }
 }
-
 }  // namespace winrt::RivetHost::implementation
