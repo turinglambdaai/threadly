@@ -352,7 +352,7 @@ void MainWindow::ApplyRows(
   //               like-count last-posted-at)
   // search row = (id title created-at posts-count)
   topics_.clear();
-  winrt::single_threaded_observable_vector<winrt::hstring> items;
+  auto items = winrt::single_threaded_observable_vector<winrt::hstring>();
   for (auto const& row : rows) {
     if (row.size() < 4) continue;
     TopicRow topic;
