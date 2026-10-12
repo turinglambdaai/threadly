@@ -5,6 +5,24 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.3.0 - 2026-10-12
+
+The hosts learn to update themselves — the release feed published since
+0.1.0 is now consumed in-app on every platform.
+
+### Added
+- In-app self-update on macOS and Windows: a throttled silent check at
+  launch plus a manual "Check for Updates" action, the signed wrapper
+  verified end-to-end (schema, key id, Ed25519 over the exact payload
+  bytes — CryptoKit on macOS, OpenSSL 3 in the engine), download with
+  size + SHA-256 held to the signed manifest, and explicit install
+  consent. macOS swaps the bundle atomically with rollback; portable-zip
+  Windows installs swap in place via a detached handoff script, MSI
+  installs take the manual releases path.
+- CLI `update-check` command running the same verification chain.
+- Update tests driving the real captured feed through parsing and live
+  signature verification.
+
 ## 0.2.0 - 2026-10-12
 
 Windows and Linux join the family: every desktop platform ships native
