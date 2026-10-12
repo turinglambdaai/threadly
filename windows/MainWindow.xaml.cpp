@@ -292,7 +292,7 @@ void MainWindow::RunSearch(std::string const& query) {
   if (trimmed.empty()) return;
 
   search_active_ = true;
-  BackButton().Visibility(Visibility::Visible);
+  BackButton().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Visible);
   try {
     rivet_app::API api(*backend);
     auto const dispatcher = DispatcherQueue();
@@ -320,7 +320,7 @@ void MainWindow::OpenTopic(std::int64_t const id) {
     SetErrorUi("Racket backend is not running");
     return;
   }
-  Loading().Visibility(Visibility::Visible);
+  Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Visible);
   try {
     rivet_app::API api(*backend);
     auto const dispatcher = DispatcherQueue();
@@ -330,7 +330,7 @@ void MainWindow::OpenTopic(std::int64_t const id) {
         [dispatcher, weak](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
           dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
             if (auto window = weak.get()) {
-              window->Loading().Visibility(Visibility::Collapsed);
+              window->Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
               try {
                 auto const document = reader_document(result.get());
                 window->Reader().NavigateToString(winrt::to_hstring(document));
@@ -341,7 +341,7 @@ void MainWindow::OpenTopic(std::int64_t const id) {
           });
         });
   } catch (std::exception const& e) {
-    Loading().Visibility(Visibility::Collapsed);
+    Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
     SetErrorUi(e.what());
   }
 }
@@ -382,7 +382,7 @@ void MainWindow::ApplyRows(
   Topics().ItemsSource(items);
   suppress_selection_ = false;
   SidebarTitle().Text(searchMode ? L"Search results" : L"Latest");
-  BackButton().Visibility(searchMode ? Visibility::Visible : Visibility::Collapsed);
+  BackButton().Visibility(searchMode ? winrt::Microsoft::UI::Xaml::Visibility::Visible : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
   SetReadyUi();
   // Auto-open the first row so the reader never sits empty.
   if (topics_.empty()) return;
@@ -436,7 +436,7 @@ void MainWindow::SetReadyUi() {
 }
 
 void MainWindow::SetErrorUi(std::string const& message) {
-  Loading().Visibility(Visibility::Collapsed);
+  Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
   StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error);
   StatusBar().Message(winrt::to_hstring(message));
   StatusBar().IsOpen(true);

@@ -6,7 +6,7 @@
 // widgets. A generation counter drops completions from superseded loads
 // (refresh during an in-flight search, topic switch during a slow fetch).
 #include <gtk/gtk.h>
-#include <webkit/WebKit.h>
+#include <webkitgtk-6.0/webkit/WebKit.h>
 
 #include <atomic>
 #include <cstdint>
