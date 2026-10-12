@@ -76,3 +76,63 @@ jobs:
           sleep 10
           pgrep -f "threadly.app" >/dev/null || { echo "::error::app did not stay running"; exit 1; }
           pkill -f "threadly.app" || true
+
+  linux-host:
+    name: Linux host (GTK4 build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout Rivet (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: turinglambdaai/rivet
+          path: rivet
+      - name: Install Racket (CS)
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+      - name: Install GTK toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config \
+            libgtk-4-dev libadwaita-1-dev libjson-glib-dev \
+            libsecret-1-dev libglib2.0-dev libwebkit2gtk-4.1-dev \
+            libncurses-dev zlib1g-dev liblz4-dev
+      - name: Link Rivet
+        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
+      # Builds and caches the embeddable Racket CS runtime and exports
+      # RIVET_RACKET_* for the CMake host build.
+      - name: Set up embeddable Racket CS
+        uses: ./rivet/.github/actions/setup-embed-racket
+      - name: Build host
+        run: raco rivet build
+      - name: Headless boot smoke
+        run: |
+          sudo apt-get install -y xvfb
+          xvfb-run -a ./.rivet/stage/RivetHost &
+          APP_PID=$!
+          sleep 8
+          kill -0 $APP_PID
+          kill $APP_PID
+
+  windows-host:
+    name: Windows host build (WinUI 3)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout Rivet (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: turinglambdaai/rivet
+          path: rivet
+      - name: Install Racket (CS)
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+      - name: Link Rivet
+        run: raco pkg install --auto --no-docs --link "$env:GITHUB_WORKSPACE\rivet"
+      - name: Build + package + verify
+        run: raco rivet package
+        shell: bash
