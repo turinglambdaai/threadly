@@ -51,27 +51,15 @@ else()
 endif()
 
 # Rivet 0.6.x keeps splitting platform/linux/system into more translation
-# units; newer pins add files older pins fold into system_services.cpp.
-# Link whatever exists so both release pins and main-branch rivet build.
-file(GLOB RIVET_OPTIONAL_SYSTEM_SOURCES
-     "${RIVET_ROOT}/platform/linux/system/global_shortcuts.cpp")
+# units; newer pins add files older pins fold into system_services.cpp
+# (global_shortcuts, clipboard, file dialogs...). Link the whole directory
+# so both release pins and main-branch rivet build.
+file(GLOB RIVET_SYSTEM_SOURCES "${RIVET_ROOT}/platform/linux/system/*.cpp")
 
 add_executable(RivetHost
   src/main.cpp
   "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
-  # Rivet's system services span several translation units as of 0.6.x
-  # (shutdown bridge, notifications, tray, autostart, secure storage,
-  # single instance); compile the whole directory so future splits keep
-  # linking.
-  "${RIVET_ROOT}/platform/linux/system/system_services.cpp"
-  "${RIVET_ROOT}/platform/linux/system/system_services_internal.cpp"
-  "${RIVET_ROOT}/platform/linux/system/crash_shutdown.cpp"
-  ${RIVET_OPTIONAL_SYSTEM_SOURCES}
-  "${RIVET_ROOT}/platform/linux/system/notifications.cpp"
-  "${RIVET_ROOT}/platform/linux/system/tray.cpp"
-  "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
-  "${RIVET_ROOT}/platform/linux/system/secure_storage.cpp"
-  "${RIVET_ROOT}/platform/linux/system/single_instance.cpp"
+  ${RIVET_SYSTEM_SOURCES}
   "${RIVET_ROOT}/platform/linux/theme/theme.cpp"
   "${RIVET_ROOT}/runtime/src/protocol.cpp"
 )
