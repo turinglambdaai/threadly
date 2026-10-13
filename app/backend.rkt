@@ -226,14 +226,16 @@
 ;; Clicking a row opens topic-id. Unsigned-in → empty rows + notify.
 ;; Reply to a topic. → one row (post-id post-number); a fixed 2-tuple
 ;; isn't a supported Rivet wire type, so it travels like every other
-;; row-listing endpoint.
-(define-rpc (post-create [topic-id String] [raw String] : (List (List String)))
+;; row-listing endpoint. The second parameter is `body`, not `raw` —
+;; codegen names its call-result local after nothing in particular but
+;; collides with argument names (rivet codegen issue, filed upstream).
+(define-rpc (post-create [topic-id String] [body String] : (List (List String)))
   (with-handlers
       ([exn:fail?
         (lambda (e)
           (notify (exn-message e))
           (list (list "" "")))])
-    (define created (create-post (string->number topic-id) raw))
+    (define created (create-post (string->number topic-id) body))
     (list (list (~a (d:created-post-id created))
                 (~a (d:created-post-post-number created))))))
 

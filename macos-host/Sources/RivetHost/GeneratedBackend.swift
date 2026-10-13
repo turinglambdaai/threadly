@@ -148,8 +148,8 @@ public struct RivetAPI: Sendable {
         let result = try await client.call("open-releases", arguments: [])
         return try decode_Void(result)
     }
-    public func post_create(topic_id: String, raw: String) async throws -> [[String]] {
-        let result = try await client.call("post-create", arguments: [encode_String(topic_id), encode_String(raw)])
+    public func post_create(topic_id: String, body: String) async throws -> [[String]] {
+        let result = try await client.call("post-create", arguments: [encode_String(topic_id), encode_String(body)])
         return try decode__List_List_String_(result)
     }
     public func search_list(q: String) async throws -> [[String]] {

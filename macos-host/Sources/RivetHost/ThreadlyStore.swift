@@ -166,7 +166,7 @@ final class ThreadlyStore: ObservableObject {
         postingReply = true
         Task {
             do {
-                _ = try await api.post_create(topic_id: String(topic.id), raw: body)
+                _ = try await api.post_create(topic_id: String(topic.id), body: body)
                 await MainActor.run {
                     self.postingReply = false
                     self.replySheetTopic = nil
