@@ -9,6 +9,8 @@
 ;; decrypts it with its private key, verifies the nonce, and stores the
 ;; user API key (0600). All signed requests then carry
 ;; User-Api-Key: <key>.
+;; Scopes requested: read|write|notifications (M2). Keys issued before the
+;; scope upgrade are read-only; posting re-raises the sign-in flow.
 ;;
 ;; Crypto goes through OpenSSL 3 by shelling out — the same family pattern
 ;; as update.rkt's signature verification — so the engine keeps zero
@@ -152,7 +154,7 @@
           forum-base
           (uri-encode "Threadly")
           (uri-encode (substring (string-downcase nonce) 0 32))
-          (uri-encode "read")
+          (uri-encode "read|write|notifications")
           (uri-encode nonce)
           (uri-encode pub-pem-text)))
 

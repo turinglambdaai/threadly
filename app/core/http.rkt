@@ -6,6 +6,7 @@
 ;; would otherwise surface the redirect page as the body.
 
 (require net/http-client
+         net/uri-codec
          racket/file
          racket/format
          racket/list
@@ -20,7 +21,9 @@
          headers->strings
          http-get-bytes
          http-get-string
-         http-download-file)
+         http-post-form
+         http-download-file
+         form-encode-fields)
 
 (define http-user-agent
   (format "Threadly/~a (+https://github.com/turinglambdaai/threadly)" app-version))
@@ -104,6 +107,74 @@
 (define (http-get-string url-string)
   (define-values (code headers body) (http-get-bytes url-string))
   (values code headers (bytes->string/utf-8 body)))
+
+;; ---- form POST (Discourse write API) -----------------------------------------
+
+;; application/x-www-form-urlencoded body from an alist of (key . value).
+;; Values may be strings; newlines and unicode survive the round trip.
+(define (form-encode-fields fields)
+  (string-join
+   (for/list ([kv (in-list fields)])
+     (string-append (uri-encode (car kv)) "=" (uri-encode (cdr kv))))
+   "&"))
+
+;; POST a urlencoded form, following up to 5 redirect hops (Discourse
+;; answers some writes with a temporary). → (values code headers body-bytes)
+(define (http-post-form url-string fields [extra-headers (list)])
+  (define body (string->bytes/utf-8 (form-encode-fields fields)))
+  (define-values (ssl? host port path) (split-url url-string))
+  (define conn (http-conn-open host #:ssl? ssl? #:port port))
+  (define all-headers
+    (append (list (format "User-Agent: ~a" http-user-agent)
+                  "Content-Type: application/x-www-form-urlencoded; charset=utf-8"
+                  (format "Content-Length: ~a" (bytes-length body))
+                  "Connection: close")
+            extra-headers))
+  (define-values (status resp-headers body-port)
+    (http-conn-sendrecv! conn path
+                         #:method "POST"
+                         #:headers all-headers
+                         #:data body))
+  (define code (status-code status))
+  (define resp-headers* (headers->strings resp-headers))
+  (define resp-body (port->bytes body-port))
+  (close-input-port body-port)
+  (with-handlers ([exn:fail? void]) (http-conn-close! conn))
+  ;; follow redirects for POSTs that answer 30x (rare, but the forum can)
+  (let follow ([code code] [resp-headers* resp-headers*] [resp-body resp-body] [hops 0])
+    (define location
+      (for/or ([h (in-list resp-headers*)] #:when (string-prefix? (string-downcase h) "location:"))
+        (string-trim (substring h (string-length "location:")))))
+    (if (and (member code '(301 302 303 307 308)) location (< hops 5))
+        (let-values ([(ssl2? host2 port2 path2) (split-url location)])
+          (define conn2 (http-conn-open host2 #:ssl? ssl2? #:port port2))
+          (define-values (st2 rh2 bp2)
+            (http-conn-sendrecv! conn2 path2 #:method "GET"
+                                 #:headers (list (format "User-Agent: ~a" http-user-agent)
+                                                 "Connection: close")))
+          (define c2 (status-code st2))
+          (define rh* (headers->strings rh2))
+          (define b2 (port->bytes bp2))
+          (close-input-port bp2)
+          (with-handlers ([exn:fail? void]) (http-conn-close! conn2))
+          (follow c2 rh* b2 (add1 hops)))
+        (values code resp-headers* resp-body))))
+
+;; DELETE with the same header plumbing (Discourse un-like).
+(define (http-delete url-string [extra-headers (list)])
+  (define-values (ssl? host port path) (split-url url-string))
+  (define conn (http-conn-open host #:ssl? ssl? #:port port))
+  (define all-headers
+    (append (list (format "User-Agent: ~a" http-user-agent)
+                  "Connection: close")
+            extra-headers))
+  (define-values (status resp-headers body-port)
+    (http-conn-sendrecv! conn path #:method "DELETE" #:headers all-headers))
+  (define code (status-code status))
+  (define body (port->bytes body-port))
+  (close-input-port body-port)
+  (with-handlers ([exn:fail? void]) (http-conn-close! conn))
+  (values code body))
 
 ;; Stream a download to dest-path. on-progress is called as
 ;; (on-progress done-bytes total-bytes-or-#f) at most every 256 KiB.

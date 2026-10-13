@@ -35,6 +35,9 @@
          parse-notifications
          notification-type-label
          (struct-out forum-notification)
+         create-post
+         like-post
+         (struct-out created-post)
          html->text)
 
 (struct topic-summary (id title slug created-at last-posted-at
@@ -211,6 +214,56 @@
   (unless (auth:auth-signed-in?)
     (error 'fetch-notifications "sign in to see notifications"))
   (parse-notifications (fetch-json-cached "/notifications.json")))
+
+;; ---- writes (M2: reply; needs read|write scope) ------------------------------
+
+(struct created-post (id post-number topic-slug) #:transparent)
+
+;; Reply to a topic (or to a specific post when reply-to is given).
+;; → created-post. Raises signed-in / HTTP / Discourse errors with the
+;; forum's own message when present (rate limits, validation).
+(define (create-post topic-id raw [reply-to-post-number #f])
+  (define key (or (auth:auth-api-key)
+                  (error 'create-post "sign in to reply")))
+  (define fields
+    (append (list (cons "topic_id" (~a topic-id))
+                  (cons "raw" raw))
+            (if reply-to-post-number
+                (list (cons "reply_to_post_number" (~a reply-to-post-number)))
+                (list))))
+  (define-values (code _h body)
+    (http-post-form (string-append (current-forum-base-url) "/posts.json")
+                    fields
+                    (list (string-append "User-Api-Key: " key))))
+  (unless (= code 200)
+    (define detail
+      (with-handlers ([exn:fail? (λ (_) "")])
+        (define doc (read-json (open-input-bytes body)))
+        (or (and (hash? doc) (hash-ref doc 'errors #f)
+                 (string-join (hash-ref doc 'errors) ", "))
+            "")))
+    (error 'create-post "HTTP ~a~a" code
+           (if (string=? detail "") "" (string-append ": " detail))))
+  (define doc (read-json (open-input-bytes body)))
+  (created-post (hash-ref doc 'id 0)
+                (hash-ref doc 'post_number 0)
+                (hash-ref doc 'topic_slug "")))
+
+;; Like (on?) a post; Discourse toggles via was_deleted.
+(define (like-post post-id on?)
+  (define key (or (auth:auth-api-key)
+                  (error 'like-post "sign in to like posts")))
+  (define fields
+    (append (list (cons "id" (~a post-id))
+                  (cons "post_action_type_id" "2"))
+            (if on? (list) (list (cons "was_deleted" "true")))))
+  (define-values (code _h _b)
+    (http-post-form (string-append (current-forum-base-url) "/post_actions.json")
+                    fields
+                    (list (string-append "User-Api-Key: " key))))
+  (unless (= code 200)
+    (error 'like-post "HTTP ~a" code))
+  on?)
 
 (define (fetch-search q)
   (parse-search (fetch-json-cached (format "/search.json?q=~a" (uri-encode q)))))

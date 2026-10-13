@@ -30,7 +30,8 @@
          "schema.rkt"
          "version.rkt"
          (prefix-in upd: "update.rkt")
-         (prefix-in authn: "auth.rkt"))
+         (prefix-in authn: "auth.rkt")
+         (prefix-in d: "core/discourse.rkt"))
 
 (provide start
          app-version
@@ -223,6 +224,26 @@
 ;; Signed-in notifications. Rows:
 ;;   (id type-label read-flag created topic-id title username)
 ;; Clicking a row opens topic-id. Unsigned-in → empty rows + notify.
+;; Reply to a topic. → (post-id, post-number) as strings for the host.
+(define-rpc (post-create [topic-id String] [raw String] : (List String String))
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (notify (exn-message e))
+          (list "" ""))])
+    (define created (create-post (string->number topic-id) raw))
+    (list (~a (d:created-post-id created))
+          (~a (d:created-post-post-number created)))))
+
+;; Like a post (needs read|write scope).
+(define-rpc (like-post [post-id String] : Bool)
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (notify (exn-message e))
+          #f)])
+    (like-post (string->number post-id) #t)))
+
 (define-rpc (notifications-list : (List (List String)))
   (rows-or-notify
    (lambda ()
