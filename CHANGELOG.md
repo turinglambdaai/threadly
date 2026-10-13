@@ -5,6 +5,26 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.10.0 - 2026-10-13
+
+M3 — reading value-add: AI thread summaries and translation on every
+platform, plus the forum's like state on every post. This closes the
+M2/M3 milestones; M4 (mobile) stays gated on Rivet's mobile platforms.
+
+### Added
+- AI summaries and translation over any OpenAI-compatible
+  chat-completions endpoint. Configure once:
+  `threadly ai-config --base-url … --api-key … --model … --target-lang …`
+  (the key is stored 0600 and used only against that endpoint). Every
+  desktop app then grows Summarize / Translate buttons for the open
+  thread — a live-updating panel on macOS, Windows, and Linux — and the
+  CLI gains `summary <id>` and `translate <id>`.
+- Like state on every post: the reader now shows the forum's own like
+  counts up front and renders posts you have already liked as filled
+  hearts. Clicking an already-liked post does nothing; a fresh like
+  bumps the count in place. (Before this, like buttons started blank on
+  every open and showed no counts.)
+
 ## 0.9.0 - 2026-10-13
 
 M2 wrap-up — the write path reaches every platform: likes everywhere,

@@ -919,7 +919,7 @@ void run_ai(bool const summarize) {
   // setting text on an unparented (still-referenced) label is harmless.
   auto* label_ref = G_OBJECT(g_object_ref(result_label));
   auto* spinner_ref = G_OBJECT(g_object_ref(spinner));
-  auto const deliver = [label_ref, spinner_ref](std::string text) mutable {
+  auto const deliver = [label_ref, spinner_ref](std::string text) {
     g_idle_add(
         [](gpointer user_data) -> int { return on_ai_delivered(user_data); },
         new AIResult{label_ref, spinner_ref, std::move(text)});

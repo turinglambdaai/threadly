@@ -4,6 +4,11 @@
 #include "MainWindow.g.h"
 #include "GeneratedBackend.hpp"
 #include "system_services.hpp"
+#if __has_include("winui_window.hpp")
+// rivet main isolated the WinUI HWND bridge into its own header; older
+// pins keep declaring NativeWindowHandle in system_services.hpp
+#include "winui_window.hpp"
+#endif
 
 namespace winrt::RivetHost::implementation {
 
