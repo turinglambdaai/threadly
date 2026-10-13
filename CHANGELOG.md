@@ -5,6 +5,45 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.8.0 - 2026-10-13
+
+M2 third slice — write: Threadly can now speak, not just read.
+
+### Added
+- Replying: the macOS reader grows a Reply button. Signed in, it opens a
+  raw-Markdown composer (Discourse posts are markdown); posting reloads
+  the thread so the new post appears in place. Signed out, the composer
+  points at the sign-in flow with a one-click start.
+- `reply <topic-id>` on the CLI: pipe raw markdown on stdin
+  (`echo "hi" | threadly reply 4416`) and post with the app's stored
+  sign-in state.
+- The engine's HTTP client speaks writes: urlencoded form POST with
+  redirect chasing, DELETE, and per-request extra headers — the plumbing
+  the forum write API needs.
+- New tests cover form encoding (unicode + newlines survive), the POST
+  wire shape against a loopback server (request line, api-key header,
+  urlencoded body), and the sign-in scope.
+
+### Changed
+- Sign-in now requests the `read|write|notifications` scope. Keys issued
+  by 0.6.x/0.7.0 are read-only: to reply, sign out and sign in again
+  once after updating.
+- The backend's post-create RPC returns one `(post-id post-number)` row,
+  matching the row-listing shape every other endpoint uses.
+
+## 0.7.0 - 2026-10-13
+
+M2 second slice — notifications on every platform.
+
+### Added
+- Signed-in users get a Notifications view: the forum's unread mentions,
+  replies, likes, quotes, and messages, with per-type symbols and an
+  unread dot. Clicking a row opens the linked thread.
+- macOS: a Notifications row appears in Browse once signed in; Windows
+  picks notifications from the picker ComboBox; Linux from the GtkDropDown.
+- Backend RPC notifications-list plus fixtures and tests for the
+  notification parser (type labels, read flags, linked topics).
+
 ## 0.6.0 - 2026-10-12
 
 M2 first slice — signed-in mode (read): Threadly can now act as you.
