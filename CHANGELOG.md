@@ -5,6 +5,25 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.6.0 - 2026-10-12
+
+M2 first slice — signed-in mode (read): Threadly can now act as you.
+
+### Added
+- Sign in with the forum via the Discourse user API key flow: the app
+  generates an RSA-2048 handshake keypair, opens the forum approval page,
+  and the user pastes back the encrypted code. The engine decrypts it with
+  OpenSSL 3, verifies the echoed nonce, and stores the user API key 0600
+  in the data directory; the handshake private key is deleted once the
+  key is stored.
+- Every read then carries User-Api-Key, so the forum shows what this user
+  can see (private categories included). Backend RPCs: auth-begin,
+  auth-complete, auth-status, auth-sign-out.
+- macOS host: Account section in the sidebar — sign in with one click,
+  paste-the-code sheet, signed-in identity, sign out.
+- Tests cover keypair generation, decrypt + nonce-verify, nonce-mismatch
+  rejection, and sign-out hygiene (skipped gracefully without OpenSSL 3).
+
 ## 0.5.3 - 2026-10-12
 
 Pins the sidebar search field above the scrolling topic list — it used to
