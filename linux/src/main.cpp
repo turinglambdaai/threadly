@@ -703,8 +703,7 @@ void on_account_clicked(GtkButton*, gpointer) {
               [](gpointer user_data) -> int {
                 return on_simple_status_delivered(user_data);
               },
-              new std::string("Sign-in failed: " +
-                              *static_cast<std::string*>(user_data)));
+              new std::string("Sign-in failed: " + error));
           return;
         }
         g_idle_add(
