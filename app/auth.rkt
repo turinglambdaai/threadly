@@ -121,6 +121,12 @@
 
 ;; ---- begin ---------------------------------------------------------------------
 
+;; 0600 keeps credentials private on POSIX filesystems; Windows has no
+;; chmod and Racket raises on the value there, so skip it entirely.
+(define (restrict-permissions! path)
+  (unless (eq? (system-type) 'windows)
+    (file-or-directory-permissions path 384)))
+
 ;; Generates the keypair + nonce, returns the authorization URL the host
 ;; opens in the user's browser.
 (define (auth-begin)
@@ -138,7 +144,7 @@
                                     "-pkeyopt" "rsa_keygen_bits:2048"
                                     "-out" (path->string key-pem)))
     (error 'auth-begin "key generation failed"))
-  (file-or-directory-permissions key-pem 384)
+  (restrict-permissions! key-pem)
   (unless (zero? (system*/exit-code openssl
                                     "pkey" "-in" (path->string key-pem)
                                     "-pubout"
@@ -147,7 +153,7 @@
   (with-output-to-file (nonce-path)
     (lambda () (display nonce))
     #:exists 'replace)
-  (file-or-directory-permissions (nonce-path) 384)
+  (restrict-permissions! (nonce-path))
   (define pub-pem-text (string-trim (file->string pub-pem)))
   (delete-file pub-pem)
   (format "~a/user-api-key/new?application_name=~a&client_id=~a&scopes=~a&nonce=~a&public_key=~a"
@@ -207,7 +213,7 @@
   (with-output-to-file (api-key-path)
     (lambda () (display key))
     #:exists 'replace)
-  (file-or-directory-permissions (api-key-path) 384)
+  (restrict-permissions! (api-key-path))
   ;; the handshake private key has done its job; the API key is the credential
   (with-handlers ([exn:fail? void]) (delete-file (private-key-path)))
   (with-handlers ([exn:fail? void]) (delete-file (nonce-path)))

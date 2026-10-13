@@ -60,27 +60,8 @@
          (write-json (hasheq 'key "test-api-key-123"
                              'nonce (auth:auth-nonce-for-tests))))
        #:exists 'truncate)
-     (printf "DBG plain: ~v\n" (file->string plain))
      (define code (encrypt-code openssl pub plain))
-     (printf "DBG code len: ~a\n" (string-length code))
-     (define completed
-       (with-handlers ([exn:fail? (λ (e) (list 'err (exn-message e)))])
-         (auth:auth-complete code)))
-     ;; post-mortem: decrypt the same ct manually and compare
-     (define ct2 (path->string (make-temporary-file "thr-ct2~a")))
-     (with-output-to-file ct2
-       (lambda () (display code))
-       #:exists 'truncate)
-     (system* openssl "base64" "-d" "-in" ct2 "-out" "/tmp/tl-manual-ct.bin")
-     (define pt2 (path->string (make-temporary-file "thr-pt2~a")))
-     (define dec-ok (system* openssl "pkeyutl" "-decrypt" "-inkey"
-              (path->string (auth:private-key-path))
-              "-in" "/tmp/tl-manual-ct.bin" "-out" pt2))
-     (printf "DBG manual decrypt ok=~a: ~v\n" dec-ok (file->string pt2))
-     (printf "DBG manual ct bin: ~a bytes\n" (file-size "/tmp/tl-manual-ct.bin"))
-     (printf "DBG ct2 content head: ~v\n" (substring (file->string ct2) 0 (min 80 (file-size ct2))))
-     (printf "DBG plain size: ~a bytes\n" (file-size plain))
-     (check-equal? (if (list? completed) 'err completed) "test-api-key-123")
+     (check-equal? (auth:auth-complete code) "test-api-key-123")
      (check-true (auth:auth-signed-in?))
      (check-equal? (auth:auth-api-key) "test-api-key-123")
      (check-false (file-exists? (auth:private-key-path))
