@@ -601,7 +601,7 @@ int on_paste_code(gpointer user_data) {
   auto* context = new PasteContext{paste, entry};
   g_signal_connect_data(
       ok, "clicked",
-      +[](GtkButton*, gpointer user_data) {
+      G_CALLBACK(+[](GtkButton*, gpointer user_data) {
         auto* context = static_cast<PasteContext*>(user_data);
         gchar const* text = gtk_editable_get_text(GTK_EDITABLE(context->entry));
         std::string const code = text != nullptr ? text : "";
@@ -625,7 +625,7 @@ int on_paste_code(gpointer user_data) {
                   },
                   new std::string(std::move(message)));
             });
-      },
+      }),
       context, [](gpointer user_data, GClosure*) { delete static_cast<PasteContext*>(user_data); },
       GConnectFlags(0));
   g_signal_connect_swapped(cancel, "clicked",
@@ -679,12 +679,12 @@ void on_account_clicked(GtkButton*, gpointer) {
     gtk_window_set_title(GTK_WINDOW(confirm), "Sign out");
     g_signal_connect(
         confirm, "response",
-        +[](GtkDialog* dialog, gint response, gpointer) {
+        G_CALLBACK(+[](GtkDialog* dialog, gint response, gpointer) {
           gtk_window_destroy(GTK_WINDOW(dialog));
           if (response == GTK_RESPONSE_OK) {
             g_idle_add(on_sign_out_confirmed, nullptr);
           }
-        },
+        }),
         nullptr);
     gtk_window_present(GTK_WINDOW(confirm));
     return;
@@ -779,7 +779,7 @@ int on_reply_composer(gpointer) {
   auto* context = new ReplyContext{composer, GTK_TEXT_VIEW(text_view)};
   g_signal_connect_data(
       ok, "clicked",
-      +[](GtkButton*, gpointer user_data) {
+      G_CALLBACK(+[](GtkButton*, gpointer user_data) {
         auto* context = static_cast<ReplyContext*>(user_data);
         auto* buffer = gtk_text_view_get_buffer(context->text_view);
         GtkTextIter begin;
@@ -809,7 +809,7 @@ int on_reply_composer(gpointer) {
                   },
                   new std::string(std::move(error)));
             });
-      },
+      }),
       context, [](gpointer user_data, GClosure*) { delete static_cast<ReplyContext*>(user_data); },
       GConnectFlags(0));
   g_signal_connect_swapped(cancel, "clicked",
@@ -1237,11 +1237,13 @@ void on_activate(GtkApplication* app, gpointer) {
   // manager; the JS side is the same window.webkit.messageHandlers API
   // Safari/WebView use.
   auto* content_manager = webkit_user_content_manager_new();
-  webkit_user_content_manager_register_script_message_handler(content_manager,
-                                                              "threadly");
+  webkit_user_content_manager_register_script_message_handler(
+      content_manager, "threadly", nullptr);
   g_signal_connect(content_manager, "script-message-received::threadly",
                    G_CALLBACK(on_script_message), nullptr);
-  auto* web = webkit_web_view_new_with_user_content_manager(content_manager);
+  auto* web = GTK_WIDGET(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+                                      "user-content-manager", content_manager,
+                                      nullptr));
   auto* stack = gtk_stack_new();
   gtk_stack_add_named(GTK_STACK(stack), build_welcome(), "welcome");
   gtk_stack_add_named(GTK_STACK(stack), build_loading(), "loading");

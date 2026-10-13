@@ -66,7 +66,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void LoadAuthStatus();
   void ApplySignInState();
   winrt::fire_and_forget AccountFlowAsync();
-  winrt::fire_and_forget PasteCodeDialogAsync(std::wstring const& url);
+  winrt::fire_and_forget PasteCodeDialogAsync();
   winrt::fire_and_forget SignOutConfirmAsync();
   winrt::fire_and_forget ReplyDialogAsync();
   void LikePost(std::int64_t post_id);

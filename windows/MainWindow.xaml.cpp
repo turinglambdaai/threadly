@@ -779,10 +779,10 @@ winrt::fire_and_forget MainWindow::AccountFlowAsync() {
           dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
             if (auto window = weak.get()) {
               try {
-                auto const url = result.get();
                 // the browser open rides the open-url event (auth-begin
                 // both fires it and returns the URL); show the paste sheet
-                (void)window->PasteCodeDialogAsync(winrt::to_hstring(url));
+                (void)result.get();
+                (void)window->PasteCodeDialogAsync();
               } catch (std::exception const& e) {
                 window->sign_in_running_ = false;
                 window->SetErrorUi(e.what());
@@ -796,7 +796,7 @@ winrt::fire_and_forget MainWindow::AccountFlowAsync() {
   }
 }
 
-winrt::fire_and_forget MainWindow::PasteCodeDialogAsync(std::wstring const&) {
+winrt::fire_and_forget MainWindow::PasteCodeDialogAsync() {
   auto const weak = get_weak();
   muxc::TextBox box;
   box.PlaceholderText(L"Paste the code the forum shows");

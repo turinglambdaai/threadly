@@ -5,6 +5,33 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.9.0 - 2026-10-13
+
+M2 wrap-up — the write path reaches every platform: likes everywhere,
+replies on Windows and Linux, notifications read on view.
+
+### Added
+- Likes: signed in, every post in the reader grows a like button. The
+  button rides a script-message bridge (WKWebView on macOS, WebView2 on
+  Windows, WebKitGTK on Linux); the server's answer moves the button, so
+  what you see always matches the forum.
+- Windows and Linux get the account flow macOS has had since 0.6.0:
+  one-click sign-in with the paste-the-code sheet, the identity in the
+  toolbar tooltip, confirm-before-sign-out. Before this, Windows and
+  Linux had no way to sign in at all.
+- The reply composer reaches Windows (a ContentDialog) and Linux (a
+  modal composer window); posting reloads the thread so the new post
+  appears in place.
+- Notifications mark as read when the Notifications view loads, matching
+  the forum's own behavior.
+
+### Changed
+- Auth URLs open only from the backend's open-url event — auth-begin
+  both fires the event and returns the URL, so hosts that opened from
+  both channels would open the browser twice.
+- Thread rows carry the post id as a sixth column; the like buttons
+  target it.
+
 ## 0.8.0 - 2026-10-13
 
 M2 third slice — write: Threadly can now speak, not just read.
