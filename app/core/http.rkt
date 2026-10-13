@@ -184,7 +184,9 @@
   ;; release assets answer with a 30x to their CDN — chase up to 5 hops,
   ;; mirroring http-get-bytes
   (let download-loop ([url url-string] [hops 0])
-    (define-values (ssl? host port path) (split-url url-string))
+    ;; split the loop variable, not the outer original URL: each hop must
+    ;; request the Location target, or GitHub's 302 hops exhaust and fail.
+    (define-values (ssl? host port path) (split-url url))
     (define conn (http-conn-open host #:ssl? ssl? #:port port))
     (define-values (status resp-headers body-port)
       (http-conn-sendrecv! conn path

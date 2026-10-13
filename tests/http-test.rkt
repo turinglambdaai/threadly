@@ -6,6 +6,7 @@
 ;; throttled or refused).
 
 (require rackunit
+         racket/file
          racket/list
          racket/string
          racket/tcp
@@ -66,3 +67,55 @@
                     sent)
              #t))
    "the User-Agent must survive the redirect hop"))
+
+(test-case "http-download-file requests the redirect target, not the original URL"
+  ;; Regression for the OTA download leg: the loop split the outer original
+  ;; URL every hop, so a GitHub-style 302 chain re-requested /start until
+  ;; the hop budget ran out and the download never landed. The second hop
+  ;; answers 200 with the payload only for the redirected path — a client
+  ;; still asking for /start gets a 404 and the file stays absent.
+  (define-values (listener port) (open-loopback-listener))
+  (define payload (make-bytes 4096 7))
+  (define done (make-semaphore))
+  (define server
+    (thread
+     (lambda ()
+       ;; hop 1 → 302 to /final
+       (define-values (in1 out1) (tcp-accept listener))
+       (read-request-headers in1)
+       (fprintf out1 "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:~a/final\r\nContent-Length: 0\r\nConnection: close\r\n\r\n" port)
+       (close-input-port in1)
+       (close-output-port out1)
+       ;; hop 2 → 200 payload only for the redirected path
+       (define-values (in2 out2) (tcp-accept listener))
+       (define request-line (read-line in2 'any))
+       (if (regexp-match? #rx"^GET /final " (or request-line ""))
+           (begin
+             (fprintf out2 "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ~a\r\nConnection: close\r\n\r\n" (bytes-length payload))
+             (write-bytes payload out2))
+           (fprintf out2 "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
+       (close-input-port in2)
+       (close-output-port out2)
+       (tcp-close listener)
+       (semaphore-post done))))
+
+  (define dest (make-temporary-file "threadly-dl-~a" 'directory))
+  (define target (build-path dest "artifact.bin"))
+  (dynamic-wind
+    (lambda () (void))
+    (lambda ()
+      (define-values (code written)
+        (http-download-file (format "http://127.0.0.1:~a/start" port)
+                            target))
+      (check-equal? code 200)
+      (check-equal? written (bytes-length payload))
+      (check-true (file-exists? target) "the redirected payload must be written")
+      (when (file-exists? target)
+        (check-equal? (file->bytes target) payload)))
+    (lambda ()
+      (delete-directory/files dest)
+      (kill-thread server)
+      ;; The server thread owns the close in the success path; tolerate a
+      ;; already-closed listener when the test failed early.
+      (with-handlers ([exn:fail? void]) (tcp-close listener))
+      (sync/timeout 1 (thread-dead-evt server)))))
