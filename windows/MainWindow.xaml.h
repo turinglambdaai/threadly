@@ -46,6 +46,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void LoadLatest(bool fresh);
   void LoadCategory(std::wstring const& slug, std::int64_t id,
                     std::wstring const& name);
+  void LoadNotifications();
   void RefreshCategoryPicker();
   void RunSearch(std::string const& query);
   void OpenTopic(std::int64_t id);

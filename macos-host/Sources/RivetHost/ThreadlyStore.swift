@@ -41,10 +41,20 @@ final class ThreadlyStore: ObservableObject {
         var scope: Scope { .category(id: id, slug: slug) }
     }
 
-    /// What the sidebar is browsing: the whole forum, or one category.
+    /// What the sidebar is browsing: the whole forum, a category, or the
+    /// signed-in user's notifications.
     enum Scope: Hashable {
         case latest
+        case notifications
         case category(id: Int, slug: String)
+    }
+
+    struct NotificationRow: Identifiable, Hashable {
+        let id: Int
+        let symbol: String
+        let text: String
+        let createdAt: String
+        let topicId: Int?
     }
 
     @Published var topics: [TopicRow] = []
@@ -58,6 +68,7 @@ final class ThreadlyStore: ObservableObject {
     @Published var loadingPosts = false
     @Published var statusLine = ""
     @Published var signedInUser: String?
+    @Published var notifications: [NotificationRow] = []
     @Published var signInStage: SignInStage = .idle
 
     enum SignInStage: Equatable {
@@ -168,14 +179,19 @@ final class ThreadlyStore: ObservableObject {
         defer { loadingTopics = false }
         self.scope = scope
         do {
-            let rows: [[String]]
             switch scope {
             case .latest:
-                rows = try await api.latest_list(page: 0, fresh: fresh)
+                let rows = try await api.latest_list(page: 0, fresh: fresh)
+                topics = rows.map(Self.topic(fromLatest:))
+            case .notifications:
+                let rows = try await api.notifications_list()
+                notifications = rows.map(Self.notification(from:))
             case .category(let id, let slug):
-                rows = try await api.category_topics_list(slug: slug, id: String(id))
+                let rows = try await api.category_topics_list(slug: slug, id: String(id))
+                topics = rows.map(Self.topic(fromLatest:))
             }
-            topics = rows.map(Self.topic(fromLatest:))
+            selectedTopic = nil
+            posts = []
             if searchResults.isEmpty == false { searchResults = [] }
             selectedTopic = nil
             posts = []
@@ -212,12 +228,19 @@ final class ThreadlyStore: ObservableObject {
     }
 
     func openTopic(_ topic: TopicRow) async {
-        selectedTopic = topic
+        await openTopicId(topic.id, title: topic.title)
+    }
+
+    /// Opens a thread by id; notifications carry only the id.
+    func openTopicId(_ id: Int, title: String) async {
+        selectedTopic = TopicRow(id: id, title: title, categoryId: 0,
+                                 postsCount: 0, replyCount: 0, views: 0,
+                                 likeCount: 0, lastPosted: "")
         guard let api else { return }
         loadingPosts = true
         defer { loadingPosts = false }
         do {
-            let rows = try await api.topic_open(id: String(topic.id))
+            let rows = try await api.topic_open(id: String(id))
             posts = rows.compactMap(Self.post(from:))
             statusLine = ""
         } catch {
@@ -281,6 +304,33 @@ final class ThreadlyStore: ObservableObject {
             avatarURL: row[1],
             html: row[2],
             createdAt: row[3])
+    }
+
+    private static func notification(from row: [String]) -> NotificationRow {
+        // notifications row = (id type-label read-flag created topic-id title username)
+        let symbol: String = {
+            switch row.count > 1 ? row[1] : "" {
+            case "reply": return "arrowshape.turn.up.left.fill"
+            case "like", "likes": return "heart.fill"
+            case "mention", "group-mention": return "at"
+            case "quote": return "text.quote"
+            case "message": return "envelope"
+            case "edited": return "pencil"
+            case "link": return "link"
+            default: return "bell.fill"
+            }
+        }()
+        let username = row.count > 6 ? row[6] : ""
+        let title = row.count > 5 ? row[5] : ""
+        let created = row.count > 3 ? row[3] : ""
+        let topicId = row.count > 4 ? Int(row[4]) ?? 0 : 0
+        let read = row.count > 2 && row[2] == "1"
+        let text = username.isEmpty ? title : "\(username) · \(title)"
+        return NotificationRow(id: row.count > 0 ? Int(row[0]) ?? 0 : 0,
+                               symbol: symbol,
+                               text: read ? text : "● " + text,
+                               createdAt: created,
+                               topicId: topicId)
     }
 
     func categoryName(_ id: Int) -> String {

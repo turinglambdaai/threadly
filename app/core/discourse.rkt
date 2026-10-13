@@ -31,6 +31,10 @@
          parse-categories
          fetch-category-topics
          fetch-current-user
+         fetch-notifications
+         parse-notifications
+         notification-type-label
+         (struct-out forum-notification)
          html->text)
 
 (struct topic-summary (id title slug created-at last-posted-at
@@ -174,6 +178,39 @@
   (define user (hash-ref doc 'current_user (hasheq)))
   (values (hash-ref user 'username "")
           (hash-ref user 'avatar_template "")))
+
+;; ---- notifications (signed-in reads) -----------------------------------------
+
+(struct forum-notification (id type-label read? created-at topic-id title username)
+  #:transparent)
+
+;; Discourse notification_type integers -> human labels. Unknown types
+;; fall back to "notification" so future forum features degrade gracefully.
+(define (notification-type-label n)
+  (case n
+    [(1) "mention"] [(2) "reply"] [(3) "quote"] [(4) "edited"]
+    [(5) "like"] [(6) "message"] [(9) "posted"] [(11) "link"]
+    [(15) "group-mention"] [(18) "likes"]
+    [else "notification"]))
+
+(define (parse-notifications doc)
+  (hash-or-fail 'parse-notifications doc)
+  (for/list ([n (in-list (hash-ref doc 'notifications (list)))])
+    (define data (hash-ref n 'data (hasheq)))
+    (forum-notification
+     (hash-ref n 'id 0)
+     (notification-type-label (hash-ref n 'notification_type 0))
+     (eq? (json-clean (hash-ref n 'read #f)) #t)
+     (json-clean (hash-ref n 'created_at #f))
+     (json-clean (hash-ref n 'topic_id #f))
+     (hash-ref data 'topic_title "")
+     (hash-ref data 'display_username ""))))
+
+;; Requires a signed-in user: the endpoint 404s without User-Api-Key.
+(define (fetch-notifications)
+  (unless (auth:auth-signed-in?)
+    (error 'fetch-notifications "sign in to see notifications"))
+  (parse-notifications (fetch-json-cached "/notifications.json")))
 
 (define (fetch-search q)
   (parse-search (fetch-json-cached (format "/search.json?q=~a" (uri-encode q)))))

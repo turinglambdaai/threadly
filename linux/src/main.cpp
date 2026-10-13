@@ -74,6 +74,7 @@ struct AppState {
 
   std::vector<TopicRow> topics;
   std::map<std::int64_t, Category> categories;
+  bool notifications_active{false};
   // Ordered (id, name, slug) in the forum's own order; the drop-down's
   // selected index maps to this minus one (0 = Latest).
   std::vector<std::tuple<std::int64_t, std::string, std::string>> category_order;
@@ -296,6 +297,7 @@ void apply_rows(std::vector<TopicRow> rows, bool const search_mode) {
 void update_scope_heading();
 void load_latest(bool fresh);
 void load_category(std::int64_t id, std::string const& slug);
+void load_notifications();
 
 // ---- completion plumbing -----------------------------------------------------------
 
@@ -414,7 +416,7 @@ int on_posts_delivered(gpointer user_data) {
 
 // ---- actions -------------------------------------------------------------------------
 
-// Drop-down navigation: 0 = Latest, n = category_order[n-1].
+// Drop-down navigation: 0 = Latest, 1 = Notifications, n = category_order[n-2].
 void on_picker_selected(GtkDropDown* dropdown, GParamSpec*, gpointer) {
   if (g_state.suppress_category_signal) return;
   auto const selected = gtk_drop_down_get_selected(dropdown);
@@ -425,7 +427,11 @@ void on_picker_selected(GtkDropDown* dropdown, GParamSpec*, gpointer) {
     }
     return;
   }
-  auto const slot = selected - 1;
+  if (selected == 1) {
+    load_notifications();
+    return;
+  }
+  auto const slot = selected - 2;
   if (slot < g_state.category_order.size()) {
     auto const [id, name, slug] = g_state.category_order[slot];
     load_category(id, slug);
@@ -455,6 +461,7 @@ void load_latest(bool const fresh) {
   if (g_state.api == nullptr) return;
   g_state.generation += 1;
   g_state.search_active = false;
+  g_state.notifications_active = false;
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.search), FALSE);
   (void)g_state.api->latest_list_async(
       0, fresh, [](rivet_app::Result<Rows> result) mutable {
@@ -475,6 +482,7 @@ void load_category(std::int64_t const id, std::string const& slug) {
   if (g_state.api == nullptr) return;
   g_state.generation += 1;
   g_state.search_active = false;
+  g_state.notifications_active = false;
   reader_loading();
   (void)g_state.api->category_topics_list_async(
       slug, std::to_string(id),
@@ -494,6 +502,7 @@ void run_search(std::string const& query) {
 
   g_state.generation += 1;
   g_state.search_active = true;
+  g_state.notifications_active = false;
   reader_loading();
   (void)g_state.api->search_list_async(
       trimmed, [](rivet_app::Result<Rows> result) mutable {
@@ -509,6 +518,21 @@ void open_topic(TopicRow const& topic) {
       std::to_string(topic.id), [](rivet_app::Result<Rows> result) mutable {
         g_idle_add(on_posts_delivered,
                    new rivet_app::Result<Rows>(std::move(result)));
+      });
+}
+
+// Signed-in notifications reuse the topic-row pipeline: id = the linked
+// topic id (so a click opens the thread), title = "type — username · title".
+void load_notifications() {
+  if (g_state.api == nullptr) return;
+  g_state.generation += 1;
+  g_state.notifications_active = true;
+  g_state.search_active = false;
+  reader_loading();
+  (void)g_state.api->notifications_list_async(
+      [](rivet_app::Result<Rows> result) mutable {
+        g_idle_add(on_rows_delivered,
+                   wrap_result(g_state.generation, std::move(result)));
       });
 }
 
@@ -712,6 +736,7 @@ GtkWidget* build_sidebar() {
   // and whose remaining entries are the forum's categories in order.
   auto* picker_model = gtk_string_list_new(nullptr);
   gtk_string_list_append(picker_model, "Latest");
+  gtk_string_list_append(picker_model, "Notifications");
   auto* picker = gtk_drop_down_new(G_LIST_MODEL(picker_model), nullptr);
   gtk_widget_set_hexpand(picker, TRUE);
 

@@ -7,7 +7,7 @@ public enum RivetGeneratedConfig {
     public static let moduleName = "backend"
     public static let entryName = "start"
     public static let displayName = "Threadly"
-    public static let version = "0.5.3"
+    public static let version = "0.6.0"
     public static let build: Int64 = 1
     public static let identifier = "site.jrtx.threadly"
     public static let releaseChannel = "stable"
@@ -134,6 +134,10 @@ public struct RivetAPI: Sendable {
     }
     public func latest_list(page: Int64, fresh: Bool) async throws -> [[String]] {
         let result = try await client.call("latest-list", arguments: [encode_Int64(page), encode_Bool(fresh)])
+        return try decode__List_List_String_(result)
+    }
+    public func notifications_list() async throws -> [[String]] {
+        let result = try await client.call("notifications-list", arguments: [])
         return try decode__List_List_String_(result)
     }
     public func open_releases() async throws -> Void {

@@ -57,6 +57,17 @@
 
 ;; ---- parse-categories ---------------------------------------------------------
 
+(test-case "parse-notifications: signed-in rows"
+  (define ns (parse-notifications (load-fixture "notifications.json")))
+  (check-equal? (length ns) 3)
+  (define first-n (first ns))
+  (check-equal? (notification-type-label 2) "reply")
+  (check-false (forum-notification-read? first-n))
+  (check-true ((forum-notification-topic-id first-n) . > . 0))
+  (check-equal? (notification-type-label 5) "like")
+  (check-equal? (notification-type-label 1) "mention")
+  (check-equal? (notification-type-label 999) "notification"))
+
 (test-case "parse-categories: category_list.categories"
   (define cats (parse-categories (load-fixture "categories.json")))
   (check-true ((length cats) . > . 0))

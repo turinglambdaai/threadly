@@ -143,6 +143,16 @@ enum SidebarItem: Hashable {
     case topic(Int)
 }
 
+extension ThreadlyStore.Scope {
+    var label: String {
+        switch self {
+        case .latest: return "Latest"
+        case .notifications: return "Notifications"
+        case .category(_, let slug): return slug
+        }
+    }
+}
+
 private struct SidebarView: View {
     @EnvironmentObject private var store: ThreadlyStore
     @State private var searchText = ""
@@ -154,6 +164,10 @@ private struct SidebarView: View {
             // --- Browse: the Discourse information architecture — the
             // forum first, then its categories in the forum's own order.
             Section("Browse") {
+                if store.signedInUser != nil {
+                    Label("Notifications", systemImage: "bell.fill")
+                        .tag(SidebarItem.scope(.notifications))
+                }
                 Label("Latest", systemImage: "tray.2")
                     .tag(SidebarItem.scope(.latest))
                 ForEach(store.categories) { category in
@@ -184,6 +198,18 @@ private struct SidebarView: View {
                         }
                         .buttonStyle(.borderless)
                         .font(.caption)
+                    }
+                }
+            } else if store.scope == .notifications {
+                Section("Notifications") {
+                    ForEach(store.notifications) { n in
+                        NotificationListRow(row: n)
+                            .tag(SidebarItem.topic(n.id))
+                    }
+                    if store.notifications.isEmpty {
+                        Text("No notifications.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             } else {
@@ -292,6 +318,8 @@ private struct SidebarView: View {
         switch store.scope {
         case .latest:
             return "Latest"
+        case .notifications:
+            return "Notifications"
         case .category(let id, _):
             return store.categoryName(id)
         }
@@ -321,7 +349,14 @@ private struct SidebarView: View {
                         }
                     }
                 case .topic(let id):
-                    if let topic = store.displayTopics.first(where: { $0.id == id }) {
+                    if store.scope == .notifications {
+                        // a notification row: open its linked topic
+                        if let n = store.notifications.first(where: { $0.id == id }),
+                           let topicId = n.topicId {
+                            Task { await store.openTopicId(topicId,
+                                                           title: n.text) }
+                        }
+                    } else if let topic = store.displayTopics.first(where: { $0.id == id }) {
                         Task { await store.openTopic(topic) }
                     }
                 case .none:
@@ -377,6 +412,29 @@ private struct TopicListRow: View {
             return formatter.string(from: date)
         }
         return iso
+    }
+}
+
+private struct NotificationListRow: View {
+    let row: ThreadlyStore.NotificationRow
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: row.symbol)
+                .foregroundStyle(DesignTokens.accent)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.text)
+                    .font(.callout)
+                    .lineLimit(2)
+                if row.createdAt.isEmpty == false {
+                    Text(row.createdAt)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 

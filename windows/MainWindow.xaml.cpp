@@ -291,6 +291,7 @@ void MainWindow::RefreshCategoryPicker() {
   auto items = CategoryPicker().Items();
   items.Clear();
   items.Append(winrt::box_value(winrt::hstring(L"Latest")));
+  items.Append(winrt::box_value(winrt::hstring(L"Notifications")));
   for (auto const& [id, name, slug] : category_order_) {
     items.Append(winrt::box_value(name));
   }
@@ -311,10 +312,70 @@ void MainWindow::CategoryPicker_SelectionChanged(
     }
     return;
   }
-  auto const slot = static_cast<std::size_t>(index - 1);
+  if (index == 1) {
+    LoadNotifications();
+    return;
+  }
+  auto const slot = static_cast<std::size_t>(index - 2);
   if (slot >= category_order_.size()) return;
   auto const [id, name, slug] = category_order_[slot];
   LoadCategory(slug, id, name);
+}
+
+// Signed-in notifications reuse the topic-row pipeline: each row opens its
+// linked topic. Unsigned-in users get the engine's error via the RPC.
+void MainWindow::LoadNotifications() {
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) {
+    SetErrorUi("Racket backend is not running");
+    return;
+  }
+  search_active_ = false;
+  try {
+    rivet_app::API api(*backend);
+    auto const dispatcher = DispatcherQueue();
+    auto const weak = get_weak();
+    (void)api.notifications_list_async(
+        [dispatcher, weak](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+          dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
+            if (auto window = weak.get()) {
+              try {
+                window->topics_.clear();
+                auto items = winrt::single_threaded_observable_vector<winrt::hstring>();
+                for (auto const& row : result.get()) {
+                  // notifications row = (id type-label read-flag created
+                  //                       topic-id title username)
+                  if (row.size() < 6) continue;
+                  auto const topic_id = std::strtoll(row[4].c_str(), nullptr, 10);
+                  auto const type = wide(row[1]);
+                  auto const username = row.size() > 6 && !row[6].empty()
+                                            ? wide(row[6]) + L" · "
+                                            : L"";
+                  auto const title = wide(row[5]);
+                  auto const unread = row[2] != "1";
+
+                  std::wstringstream line;
+                  line << (unread ? L"● " : L"") << type << L" — "
+                       << username << title << L"\n"
+                       << wide(row[3]);
+                  items.Append(winrt::hstring(line.str()));
+                  window->topics_.push_back({topic_id, title});
+                }
+                window->suppress_selection_ = true;
+                window->Topics().ItemsSource(items);
+                window->suppress_selection_ = false;
+                window->SidebarTitle().Text(L"Notifications");
+                window->BackButton().Visibility(Visibility::Visible);
+                window->SetReadyUi();
+              } catch (std::exception const& e) {
+                window->SetErrorUi(e.what());
+              }
+            }
+          });
+        });
+  } catch (std::exception const& e) {
+    SetErrorUi(e.what());
+  }
 }
 
 void MainWindow::LoadCategory(std::wstring const& slug, std::int64_t const id,

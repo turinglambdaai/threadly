@@ -220,6 +220,21 @@
   (authn:auth-sign-out)
   (void))
 
+;; Signed-in notifications. Rows:
+;;   (id type-label read-flag created topic-id title username)
+;; Clicking a row opens topic-id. Unsigned-in → empty rows + notify.
+(define-rpc (notifications-list : (List (List String)))
+  (rows-or-notify
+   (lambda ()
+     (for/list ([n (in-list (fetch-notifications))])
+       (list (~a (forum-notification-id n))
+             (forum-notification-type-label n)
+             (if (forum-notification-read? n) "1" "0")
+             (or (forum-notification-created-at n) "")
+             (~a (forum-notification-topic-id n))
+             (forum-notification-title n)
+             (forum-notification-username n))))))
+
 ;; ---- lifecycle ---------------------------------------------------------------
 
 (define (start in-fd out-fd)
