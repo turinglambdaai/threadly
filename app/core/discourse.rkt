@@ -12,7 +12,8 @@
          racket/string
          "../version.rkt"
          "cache.rkt"
-         "http.rkt")
+         "http.rkt"
+         (prefix-in auth: "../auth.rkt"))
 
 (provide (struct-out topic-summary)
          (struct-out forum-post)
@@ -29,6 +30,7 @@
          fetch-categories
          parse-categories
          fetch-category-topics
+         fetch-current-user
          html->text)
 
 (struct topic-summary (id title slug created-at last-posted-at
@@ -66,8 +68,14 @@
         (cache-store! url doc)
         doc)))
 
+;; When signed in, every read carries the user's API key so the forum
+;; shows what *this* user can see (private categories included).
+(define (signed-request-headers)
+  (define key (auth:auth-api-key))
+  (if key (list (string-append "User-Api-Key: " key)) (list)))
+
 (define (fetch-json url)
-  (define-values (code headers body) (http-get-bytes url))
+  (define-values (code headers body) (http-get-bytes url (signed-request-headers)))
   (unless (= code 200)
     (error 'discourse "HTTP ~a for ~a~a"
            code url
@@ -157,6 +165,15 @@
 ;; as latest — parse-latest handles it.
 (define (fetch-category-topics slug id)
   (parse-latest (fetch-json-cached (format "/c/~a/~a.json" slug id))))
+
+;; /session/current.json → (values username avatar-template) for the
+;; signed-in identity; requires a stored user API key.
+(define (fetch-current-user)
+  (define key (or (auth:auth-api-key) (error 'fetch-current-user "not signed in")))
+  (define doc (fetch-json-cached "/session/current.json"))
+  (define user (hash-ref doc 'current_user (hasheq)))
+  (values (hash-ref user 'username "")
+          (hash-ref user 'avatar_template "")))
 
 (define (fetch-search q)
   (parse-search (fetch-json-cached (format "/search.json?q=~a" (uri-encode q)))))

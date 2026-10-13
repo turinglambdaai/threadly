@@ -30,6 +30,11 @@
    [downloaded-path : (Optional String)]
    [available-version : (Optional String)]))
 
+;; Account sign-in state for the hosts.
+(define-record AuthStatus
+  ([status : String]
+   [username : String]))
+
 ;; Optional slots travel as void on the wire (absent), so callers wrap #f.
 (define (nullable value)
   (if value value (void)))

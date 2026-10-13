@@ -205,6 +205,8 @@ private struct SidebarView: View {
             }
         }
         }
+        .safeAreaInset(edge: .bottom) { accountSection }
+        .sheet(isPresented: signInSheetBinding) { SignInSheetView() }
         .listStyle(.sidebar)
         .frame(minWidth: 300)
         .onChange(of: searchText) { _, newValue in
@@ -245,6 +247,45 @@ private struct SidebarView: View {
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 4)
+    }
+
+    /// Sidebar footer: sign-in state. Signed out → one-click start; the
+    /// forum approval page opens in the browser and the paste-code sheet
+    /// appears here. Signed in → username + sign out.
+    private var accountSection: some View {
+        Group {
+            if let user = store.signedInUser {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.crop.circle.fill")
+                        .foregroundStyle(DesignTokens.accent)
+                    Text(user)
+                        .font(.callout)
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Sign out") { store.signOut() }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            } else if store.signInStage == .idle {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.crop.circle")
+                        .foregroundStyle(.secondary)
+                    Button("Sign in with racket.discourse") { store.beginSignIn() }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            }
+        }
+    }
+
+    private var signInSheetBinding: Binding<Bool> {
+        Binding(get: { store.signInStage == .awaitingCode },
+                set: { if !$0 { store.cancelSignIn() } })
     }
 
     private var scopeTitle: String {
@@ -576,5 +617,43 @@ struct ThreadWebView: NSViewRepresentable {
             return displayFormatter.string(from: date)
         }
         return iso
+    }
+}
+
+
+// MARK: - Sign-in sheet
+
+/// Shown while the forum approval page is open in the browser: the user
+/// pastes the code Discourse displays after approval.
+private struct SignInSheetView: View {
+    @EnvironmentObject private var store: ThreadlyStore
+    @State private var code = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Finish signing in")
+                .font(.title3.weight(.semibold))
+            Text("Approve Threadly on the forum page that just opened, copy the code it shows, and paste it here.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField("Paste the code", text: $code)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+            HStack {
+                Spacer()
+                Button("Cancel") { store.cancelSignIn() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Complete sign-in") {
+                    store.completeSignIn(code: code)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(code.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
+        .onAppear { focused = true }
     }
 }

@@ -29,7 +29,8 @@
          "core/paths.rkt"
          "schema.rkt"
          "version.rkt"
-         (prefix-in upd: "update.rkt"))
+         (prefix-in upd: "update.rkt")
+         (prefix-in authn: "auth.rkt"))
 
 (provide start
          app-version
@@ -178,6 +179,45 @@
 
 (define-rpc (open-releases : Void)
   (open-url upd:releases-page)
+  (void))
+
+;; ---- signed-in mode (M2) -------------------------------------------------
+;; Discourse user API key flow: auth-begin returns the forum authorization
+;; URL (hosts open it in the browser); after the user approves, the forum
+;; shows an encrypted blob that the user pastes into auth-complete. The
+;; engine decrypts it with the handshake key, verifies the nonce, and
+;; stores the user API key; every read then carries User-Api-Key, so the
+;; forum shows what this user can see.
+
+(define-rpc (auth-begin : String)
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (notify (exn-message e))
+          (void))])
+    (define url (authn:auth-begin))
+    (open-url url)
+    url))
+
+(define-rpc (auth-complete [code String] : String)
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (notify (exn-message e))
+          (void))])
+    (authn:auth-complete code)
+    (define-values (username _avatar) (fetch-current-user))
+    (with-output-to-file (authn:auth-username-path)
+      (lambda () (display username))
+      #:exists 'replace)
+    username))
+
+(define-rpc (auth-status : AuthStatus)
+  (AuthStatus (if (authn:auth-signed-in?) "in" "out")
+              (or (authn:auth-username) "")))
+
+(define-rpc (auth-sign-out : Void)
+  (authn:auth-sign-out)
   (void))
 
 ;; ---- lifecycle ---------------------------------------------------------------

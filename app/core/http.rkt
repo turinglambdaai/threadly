@@ -90,10 +90,10 @@
   (values (status-code status) resp-headers* body))
 
 ;; GET with up to 5 redirect hops. → (values code headers body-bytes)
-(define (http-get-bytes url-string)
+(define (http-get-bytes url-string [extra-headers (list)])
   (let loop ([url url-string] [hops 0])
     (define-values (code headers body)
-      (request-once url '()))
+      (request-once url extra-headers))
     (if (and (member code '(301 302 303 307 308)) (< hops 5))
         (let ([location (header-value headers "location")])
           (unless location

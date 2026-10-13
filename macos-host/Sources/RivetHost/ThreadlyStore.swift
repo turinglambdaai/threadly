@@ -57,6 +57,13 @@ final class ThreadlyStore: ObservableObject {
     @Published var posts: [PostRow] = []
     @Published var loadingPosts = false
     @Published var statusLine = ""
+    @Published var signedInUser: String?
+    @Published var signInStage: SignInStage = .idle
+
+    enum SignInStage: Equatable {
+        case idle            // no sign-in in progress
+        case awaitingCode    // browser opened the forum approval page
+    }
 
     private var api: RivetAPI?
 
@@ -70,6 +77,68 @@ final class ThreadlyStore: ObservableObject {
 
     func bind(api: RivetAPI) {
         self.api = api
+        checkAuthStatus()
+    }
+
+    // MARK: - account (M2)
+
+    func checkAuthStatus() {
+        guard let api else { return }
+        Task {
+            if let st = try? await api.auth_status(), st.status == "in" {
+                let user = st.username
+                await MainActor.run { self.signedInUser = user.isEmpty ? nil : user }
+            }
+        }
+    }
+
+    /// Opens the forum approval page in the browser, then shows the
+    /// paste-the-code sheet.
+    func beginSignIn() {
+        guard let api else { return }
+        Task {
+            do {
+                let url = try await api.auth_begin()
+                await MainActor.run { self.signInStage = .awaitingCode }
+                if let u = URL(string: url) {
+                    NSWorkspace.shared.open(u)
+                }
+            } catch {
+                await MainActor.run { self.statusLine = "Sign-in failed: \(error)" }
+            }
+        }
+    }
+
+    func completeSignIn(code: String) {
+        guard let api else { return }
+        Task {
+            do {
+                _ = try await api.auth_complete(code: code)
+                let st = try await api.auth_status()
+                let user = st.username
+                await MainActor.run {
+                    self.signedInUser = user.isEmpty ? nil : user
+                    self.signInStage = .idle
+                }
+            } catch {
+                await MainActor.run {
+                    self.signInStage = .awaitingCode  // stay on the sheet
+                    self.statusLine = "Sign-in failed: \(error)"
+                }
+            }
+        }
+    }
+
+    func cancelSignIn() {
+        signInStage = .idle
+    }
+
+    func signOut() {
+        guard let api else { return }
+        Task {
+            _ = try? await api.auth_sign_out()
+            await MainActor.run { self.signedInUser = nil }
+        }
     }
 
     func handleEvent(_ event: RivetEvent) {
