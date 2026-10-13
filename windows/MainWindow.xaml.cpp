@@ -365,7 +365,7 @@ void MainWindow::LoadNotifications() {
                 window->Topics().ItemsSource(items);
                 window->suppress_selection_ = false;
                 window->SidebarTitle().Text(L"Notifications");
-                window->BackButton().Visibility(Visibility::Visible);
+                window->BackButton().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Visible);
                 window->SetReadyUi();
               } catch (std::exception const& e) {
                 window->SetErrorUi(e.what());
