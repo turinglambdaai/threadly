@@ -37,6 +37,7 @@
          (struct-out forum-notification)
          create-post
          like-post
+         mark-notifications-read
          (struct-out created-post)
          html->text)
 
@@ -264,6 +265,21 @@
   (unless (= code 200)
     (error 'like-post "HTTP ~a" code))
   on?)
+
+;; Marks every notification read — the forum's own behavior when you view
+;; the notifications page; we fire it when the client's Notifications
+;; scope loads.
+(define (mark-notifications-read)
+  (define key (or (auth:auth-api-key)
+                  (error 'mark-notifications-read "sign in first")))
+  (define-values (code _h _b)
+    (http-post-form (string-append (current-forum-base-url)
+                                   "/notifications/mark-read")
+                    (list)
+                    (list (string-append "User-Api-Key: " key))))
+  (unless (= code 200)
+    (error 'mark-notifications-read "HTTP ~a" code))
+  #t)
 
 (define (fetch-search q)
   (parse-search (fetch-json-cached (format "/search.json?q=~a" (uri-encode q)))))

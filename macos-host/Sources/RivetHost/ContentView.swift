@@ -530,8 +530,10 @@ private struct DetailView: View {
                 ThreadWebView(
                     document: ThreadWebView.document(
                         title: topic.title,
-                        posts: store.posts
-                    )
+                        posts: store.posts,
+                        signedIn: store.signedInUser != nil
+                    ),
+                    store: store
                 )
                 .id(topic.id)
             }
@@ -543,14 +545,21 @@ private struct DetailView: View {
 
 /// The whole thread renders as one HTML document in a single WKWebView —
 /// the forum's own cooked HTML with a reader stylesheet, light and dark.
+/// The like button rides a script-message bridge: JS posts "like:<id>",
+/// the host runs the RPC, and the result is applied back with
+/// threadlyLiked() so the button always reflects the server.
 struct ThreadWebView: NSViewRepresentable {
     let document: String
+    let store: ThreadlyStore?
 
     func makeNSView(context: Context) -> WKWebView {
         let view = WKWebView()
         view.setValue(false, forKey: "drawsBackground")
         view.underPageBackgroundColor = .clear
         view.navigationDelegate = context.coordinator
+        context.coordinator.view = view
+        context.coordinator.store = store
+        view.configuration.userContentController.add(context.coordinator, name: "threadly")
         return view
     }
 
@@ -564,8 +573,10 @@ struct ThreadWebView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var lastLoaded: String?
+        weak var view: WKWebView?
+        var store: ThreadlyStore?
 
         /// Links should open in the user's browser, not navigate the reader.
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
@@ -578,24 +589,45 @@ struct ThreadWebView: NSViewRepresentable {
                 decisionHandler(.allow)
             }
         }
+
+        nonisolated func userContentController(_ userContentController: WKUserContentController,
+                                               didReceive message: WKScriptMessage) {
+            guard message.name == "threadly",
+                  let text = message.body as? String,
+                  text.hasPrefix("like:"),
+                  let postId = Int(text.dropFirst(5)) else { return }
+            Task { @MainActor in
+                guard let store = self.store else { return }
+                self.view?.evaluateJavaScript("threadlyLikePending(\(postId))", completionHandler: nil)
+                store.likePost(postId) { ok in
+                    self.view?.evaluateJavaScript("threadlyLiked(\(postId), \(ok))",
+                                                  completionHandler: nil)
+                }
+            }
+        }
     }
 
     /// The forum's cooked HTML is already sanitized server-side; this only
     /// escapes the surrounding metadata and wraps everything in a reader
     /// stylesheet that follows the system appearance. A 680px column keeps
-    /// long paragraphs readable; avatars give each post a face.
-    static func document(title: String, posts: [PostRow]) -> String {
+    /// long paragraphs readable; avatars give each post a face. Signed in,
+    /// every post grows a like button wired to the script-message bridge.
+    static func document(title: String, posts: [PostRow], signedIn: Bool = false) -> String {
         let body = posts.map { post -> String in
             let avatar = post.avatarURL.isEmpty
                 ? ""
                 : "<img class=\"avatar\" src=\"\(escape(post.avatarURL))\" onerror=\"this.style.display='none'\">"
+            let like = signedIn && post.postId > 0
+                ? "<button class=\"like\" id=\"like-\(post.postId)\" onclick=\"threadlyLike(\(post.postId))\" title=\"Like this post\">♡</button>"
+                : ""
             let meta = """
             <div class="meta">\(avatar)\
             <span class="author">\(escape(post.author))</span>\
             <span class="dot">·</span>\
             <span>#\(post.number)</span>\
             <span class="dot">·</span>\
-            <span class="date">\(escape(formatDate(post.createdAt)))</span>
+            <span class="date">\(escape(formatDate(post.createdAt)))</span>\
+            \(like)
             </div>
             """
             return "<section class=\"post\">\(meta)\(post.html)</section>"
@@ -628,6 +660,15 @@ struct ThreadWebView: NSViewRepresentable {
         }
         .meta .author { font-weight: 600; color: #C15F3C; }
         .meta .dot { opacity: .45; }
+        .meta .like {
+          margin-left: auto;
+          background: none; border: none; cursor: pointer;
+          font-size: 15px; line-height: 1;
+          color: rgba(128,128,128,.75); padding: 2px 6px;
+        }
+        .meta .like:hover { color: #C15F3C; }
+        .meta .like:disabled { opacity: .35; cursor: default; }
+        .meta .like.liked { color: #E0413E; }
         h1,h2,h3 { line-height: 1.3; }
         pre, code {
           font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -653,7 +694,22 @@ struct ThreadWebView: NSViewRepresentable {
         aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0;
           padding: 6px 12px; background: rgba(128,128,128,.08); border-radius: 6px; }
         </style></head>
-        <body>\(body)</body></html>
+        <body>\(body)
+        <script>
+        function threadlyLike(id) {
+          window.webkit.messageHandlers.threadly.postMessage("like:" + id);
+        }
+        function threadlyLikePending(id) {
+          var b = document.getElementById('like-' + id);
+          if (b) b.disabled = true;
+        }
+        function threadlyLiked(id, ok) {
+          var b = document.getElementById('like-' + id);
+          if (!b) return;
+          b.disabled = false;
+          if (ok) { b.classList.add('liked'); b.textContent = '♥'; }
+        }
+        </script></body></html>
         """
     }
 

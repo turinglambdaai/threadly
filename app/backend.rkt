@@ -104,7 +104,9 @@
              (avatar-url (forum-post-avatar-template p))
              (forum-post-cooked p)
              (or (forum-post-created-at p) "")
-             (~a (forum-post-post-number p)))))))
+             (~a (forum-post-post-number p))
+             ;; post id — the like button targets it via the webview bridge
+             (~a (forum-post-id p)))))))
 
 (define-rpc (search-list [q String] : (List (List String)))
   (rows-or-notify
@@ -247,6 +249,16 @@
           (notify (exn-message e))
           #f)])
     (like-post (string->number post-id) #t)))
+
+;; Marks all notifications read — hosts call it after listing the
+;; Notifications scope (the forum's own mark-on-view behavior).
+(define-rpc (notifications-mark-read : Void)
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (notify (exn-message e))
+          (void))])
+    (mark-notifications-read)))
 
 (define-rpc (notifications-list : (List (List String)))
   (rows-or-notify

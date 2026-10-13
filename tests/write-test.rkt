@@ -14,6 +14,7 @@
          racket/system
          racket/tcp
          (file "../app/core/http.rkt")
+         (file "../app/core/discourse.rkt")
          (file "../app/core/paths.rkt")
          (prefix-in auth: "../app/auth.rkt"))
 
@@ -112,6 +113,64 @@
   (check-true (string-contains? req-body (uri-encode "第一行"))))
 
 ;; ---- sign-in scopes include write -------------------------------------------------
+
+;; mark-notifications-read POSTs with no body beyond the api-key header —
+;; same loopback shape check as the reply POST above.
+(test-case "mark-notifications-read posts to the mark-read endpoint"
+  (define (open-loopback-listener)
+    (let loop ([tries 20])
+      (define p (+ 20000 (random 40000)))
+      (with-handlers ([exn:fail?
+                       (λ (_)
+                         (when (zero? tries) (error 'write-test "no free port"))
+                         (loop (sub1 tries)))])
+        (values (tcp-listen p 4 #f "127.0.0.1") p))))
+  (define-values (listener port) (open-loopback-listener))
+  (define captured (box #f))
+  (define server
+    (thread
+     (lambda ()
+       (define-values (in out) (tcp-accept listener))
+       (define request-line (read-line in 'any))
+       (define headers
+         (let loop2 ([acc (list request-line)])
+           (define line (read-line in 'any))
+           (if (or (eof-object? line) (string=? line ""))
+               (reverse acc)
+               (loop2 (cons line acc)))))
+       (define content-length
+         (for/or ([h (in-list headers)]
+                  #:when (string-contains? (string-downcase h) "content-length"))
+           (string->number (substring h (string-length "Content-Length: ")))))
+       (when (and content-length (> content-length 0))
+         (read-string content-length in))
+       (display "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n" out)
+       (close-input-port in)
+       (close-output-port out)
+       (tcp-close listener)
+       (set-box! captured (list request-line headers)))))
+
+  (parameterize ([current-forum-base-url (format "http://127.0.0.1:~a" port)]
+                 [current-data-dir
+                  (make-temporary-file "threadly-mark-~a" 'directory)])
+    ;; a stored key makes the request signed without touching the network
+    (define auth-dir (build-path (data-dir) "auth"))
+    (make-directory* auth-dir)
+    (with-output-to-file (build-path auth-dir "user-api-key")
+      (lambda () (display "test-key-789"))
+      #:exists 'truncate)
+    (check-true (mark-notifications-read)))
+
+  (sync/timeout 5 server)
+  (define captured-data (unbox captured))
+  (check-true (string-contains? (list-ref captured-data 0)
+                                "POST /notifications/mark-read")
+              "hits the mark-read endpoint")
+  (check-not-false
+   (findf (lambda (h) (string-contains? (string-downcase h)
+                                        "user-api-key: test-key-789"))
+          (list-ref captured-data 1))
+   "signed request"))
 
 (skip-unless-openssl
  (test-case "sign-in scopes request read|write|notifications"

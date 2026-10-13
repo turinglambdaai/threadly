@@ -5,6 +5,10 @@
 #endif
 #include "GeneratedBackend.hpp"
 
+// CoreWebView2 projections (WebMessageReceived for the like bridge) come
+// from the WebView2 NuGet's include-winrt directory.
+#include <winrt/Microsoft.Web.WebView2.Core.h>
+
 #include <sstream>
 #include <stdexcept>
 
@@ -88,17 +92,25 @@ std::string compact_date(std::string const& iso) {
 
 // The thread reader: the forum's own cooked HTML with the family reader
 // stylesheet, light and dark. Same 680px column and terracotta accents as
-// the macOS shell.
+// the macOS shell. Signed in, every post grows a like button wired to the
+// WebView2 WebMessage bridge ("like:<id>" out, threadlyLiked() back in).
 std::string reader_document(
-    std::vector<std::vector<std::string>> const& posts) {
+    std::vector<std::vector<std::string>> const& posts, bool const signed_in) {
   std::string body;
   for (auto const& row : posts) {
     if (row.size() < 5) continue;
-    // topic-post row = (author avatar-url cooked-html created-at post-number)
+    // topic-post row = (author avatar-url cooked-html created-at
+    //                   post-number post-id)
     std::string const& author = row[0];
     std::string const& avatar = row[1];
     std::string const& cooked = row[2];
     std::string const date = compact_date(row[3]);
+    std::string like;
+    if (signed_in && row.size() >= 6) {
+      like = "<button class=\"like\" id=\"like-" + row[5] +
+             "\" onclick=\"threadlyLike(" + row[5] +
+             ")\" title=\"Like this post\">&#9825;</button>";
+    }
     body += "<section class=\"post\"><div class=\"meta\">";
     if (!avatar.empty()) {
       body += "<img class=\"avatar\" src=\"" + escape_html(avatar) +
@@ -110,6 +122,7 @@ std::string reader_document(
       body += "<span class=\"dot\">·</span><span>" + escape_html(date) +
               "</span>";
     }
+    body += like;
     body += "</div>" + cooked + "</section>";
   }
 
@@ -133,6 +146,15 @@ body {
 .avatar { width: 26px; height: 26px; border-radius: 50%; margin-right: 2px; }
 .meta .author { font-weight: 600; color: #C15F3C; }
 .meta .dot { opacity: .45; }
+.meta .like {
+  margin-left: auto;
+  background: none; border: none; cursor: pointer;
+  font-size: 15px; line-height: 1;
+  color: rgba(128,128,128,.75); padding: 2px 6px;
+}
+.meta .like:hover { color: #C15F3C; }
+.meta .like:disabled { opacity: .35; cursor: default; }
+.meta .like.liked { color: #E0413E; }
 h1,h2,h3 { line-height: 1.3; }
 pre, code { font-family: "Cascadia Mono", ui-monospace, Consolas, monospace; font-size: 13px; }
 code { background: rgba(128,128,128,.14); padding: 1px 5px; border-radius: 4px; }
@@ -144,7 +166,22 @@ a { color: #C15F3C; }
 aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding: 6px 12px; background: rgba(128,128,128,.08); border-radius: 6px; }
 </style></head>
 <body>)HTML"} +
-           body + "</body></html>";
+           body + R"HTML(
+<script>
+function threadlyLike(id) {
+  window.chrome.webview.postMessage("like:" + id);
+}
+function threadlyLikePending(id) {
+  var b = document.getElementById('like-' + id);
+  if (b) b.disabled = true;
+}
+function threadlyLiked(id, ok) {
+  var b = document.getElementById('like-' + id);
+  if (!b) return;
+  b.disabled = false;
+  if (ok) { b.classList.add('liked'); b.textContent = '\u2665'; }
+}
+</script></body></html>)HTML";
 }
 
 }  // namespace
@@ -206,12 +243,24 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
                             if (auto w = weak.get()) w->SetStatus(message);
                           });
                     }
+                  } else if (std::holds_alternative<rivet_app::Open_urlEvent>(event)) {
+                    // auth-begin and open-releases hand URLs over; open in
+                    // the user's browser.
+                    auto const url =
+                        std::get<rivet_app::Open_urlEvent>(event).value;
+                    if (auto current = weak.get()) {
+                      current->DispatcherQueue().TryEnqueue([url] {
+                        (void)winrt::Windows::System::Launcher::LaunchUriAsync(
+                            winrt::Windows::Foundation::Uri(winrt::to_hstring(url)));
+                      });
+                    }
                   }
                 } catch (...) {
                   // Unknown events are forward-compat; ignore.
                 }
               });
           window->LoadLatest(false);
+          window->LoadAuthStatus();
           window->StartAutoUpdateCheck();
         } catch (std::exception const& e) {
           window->SetErrorUi(e.what());
@@ -367,6 +416,9 @@ void MainWindow::LoadNotifications() {
                 window->SidebarTitle().Text(L"Notifications");
                 window->BackButton().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Visible);
                 window->SetReadyUi();
+                // the forum marks notifications read on view; mirror that
+                rivet_app::API mark_api(*window->backend_);
+                (void)mark_api.notifications_mark_read_async([](rivet_app::Result<void>) {});
               } catch (std::exception const& e) {
                 window->SetErrorUi(e.what());
               }
@@ -450,6 +502,8 @@ void MainWindow::OpenTopic(std::int64_t const id) {
     SetErrorUi("Racket backend is not running");
     return;
   }
+  open_topic_id_ = id;
+  ApplySignInState();
   Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Visible);
   try {
     rivet_app::API api(*backend);
@@ -462,7 +516,8 @@ void MainWindow::OpenTopic(std::int64_t const id) {
             if (auto window = weak.get()) {
               window->Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
               try {
-                auto const document = reader_document(result.get());
+                auto const document = reader_document(
+                    result.get(), !window->signed_in_user_.empty());
                 if (auto const reader = window->reader_) {
                   reader.NavigateToString(winrt::to_hstring(document));
                 } else {
@@ -622,6 +677,21 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
     co_await webview.EnsureCoreWebView2Async();
     if (auto window = weak.get()) {
       window->reader_ = webview;
+      // Like bridge: the reader page posts "like:<id>"; bounce to the
+      // RPC and apply the server's answer back into the page. The event
+      // source dies with the reader control, and the handler only ever
+      // touches the window through get_weak().
+      webview.CoreWebView2().WebMessageReceived(
+          [weak](winrt::Microsoft::Web::WebView2::Core::CoreWebView2 const&,
+                 winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebMessageReceivedEventArgs const& args) {
+            auto const message = args.TryGetWebMessageAsString();
+            auto const text = std::wstring(message.c_str(), message.size());
+            if (text.rfind(L"like:", 0) != 0) return;
+            auto const post_id = std::wcstoll(text.c_str() + 5, nullptr, 10);
+            if (auto window = weak.get()) {
+              window->LikePost(post_id);
+            }
+          });
     }
   } catch (std::exception const& e) {
     if (auto window = weak.get()) {
@@ -633,4 +703,297 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
     }
   }
 }
+
+// ---- account (M2 write path) ------------------------------------------------
+
+void MainWindow::LoadAuthStatus() {
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) return;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  try {
+    rivet_app::API api(*backend);
+    (void)api.auth_status_async(
+        [dispatcher, weak](rivet_app::Result<rivet_app::AuthStatus> result) {
+          dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
+            if (auto window = weak.get()) {
+              try {
+                auto const status = result.get();
+                window->signed_in_user_ =
+                    status.status == "in" ? wide(status.username) : L"";
+                window->ApplySignInState();
+              } catch (...) {
+                // auth state is decoration at startup; flows surface errors
+              }
+            }
+          });
+        });
+  } catch (...) {
+  }
+}
+
+void MainWindow::ApplySignInState() {
+  auto const signed_in = !signed_in_user_.empty();
+  winrt::Microsoft::UI::Xaml::Controls::ToolTipService::SetToolTip(
+      AccountButton(),
+      winrt::box_value(winrt::hstring(
+          signed_in ? L"Signed in as " + signed_in_user_ +
+                          L" (click to sign out)"
+                    : L"Sign in with racket.discourse.group")));
+  ReplyButton().IsEnabled(signed_in && open_topic_id_ != 0);
+}
+
+void MainWindow::Account_Click(winrt::Windows::Foundation::IInspectable const&,
+                               Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  (void)AccountFlowAsync();
+}
+
+void MainWindow::Reply_Click(winrt::Windows::Foundation::IInspectable const&,
+                             Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  (void)ReplyDialogAsync();
+}
+
+winrt::fire_and_forget MainWindow::AccountFlowAsync() {
+  if (sign_in_running_) co_return;
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) {
+    SetErrorUi("Racket backend is not running");
+    co_return;
+  }
+  if (!signed_in_user_.empty()) {
+    (void)SignOutConfirmAsync();
+    co_return;
+  }
+
+  sign_in_running_ = true;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  try {
+    rivet_app::API api(*backend);
+    // auth-begin generates the handshake keypair (openssl shell) on the
+    // backend thread; the completion opens the browser and the paste sheet.
+    (void)api.auth_begin_async(
+        [dispatcher, weak](rivet_app::Result<std::string> result) {
+          dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
+            if (auto window = weak.get()) {
+              try {
+                auto const url = result.get();
+                // the browser open rides the open-url event (auth-begin
+                // both fires it and returns the URL); show the paste sheet
+                (void)window->PasteCodeDialogAsync(winrt::to_hstring(url));
+              } catch (std::exception const& e) {
+                window->sign_in_running_ = false;
+                window->SetErrorUi(e.what());
+              }
+            }
+          });
+        });
+  } catch (std::exception const& e) {
+    sign_in_running_ = false;
+    SetErrorUi(e.what());
+  }
+}
+
+winrt::fire_and_forget MainWindow::PasteCodeDialogAsync(std::wstring const&) {
+  auto const weak = get_weak();
+  TextBox box;
+  box.PlaceholderText(L"Paste the code the forum shows");
+  auto label = TextBlock{};
+  label.Text(L"Approve Threadly in the browser that just opened, copy the "
+             L"code it displays, and paste it here.");
+  label.TextWrapping(TextWrapping::Wrap);
+  label.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 10});
+  auto panel = StackPanel{};
+  panel.Children().Append(label);
+  panel.Children().Append(box);
+  ContentDialog dialog;
+  dialog.Title(winrt::box_value(winrt::hstring(L"Finish signing in")));
+  dialog.Content(panel);
+  dialog.PrimaryButtonText(L"Complete sign-in");
+  dialog.CloseButtonText(L"Cancel");
+  dialog.DefaultButton(winrt::Microsoft::UI::Xaml::Controls::ContentDialogButton::Primary);
+  if (auto window = weak.get()) {
+    dialog.XamlRoot(window->Content().XamlRoot());
+  }
+  auto const result = co_await dialog.ShowAsync();
+  auto const code = narrow(box.Text());
+  if (result != winrt::Microsoft::UI::Xaml::Controls::ContentDialogResult::Primary ||
+      code.find_first_not_of(" \t\r\n") == std::string::npos) {
+    if (auto window = weak.get()) window->sign_in_running_ = false;
+    co_return;
+  }
+
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) {
+    if (auto window = weak.get()) window->sign_in_running_ = false;
+    co_return;
+  }
+  auto const dispatcher = DispatcherQueue();
+  try {
+    rivet_app::API api(*backend);
+    (void)api.auth_complete_async(
+        code, [dispatcher, weak](rivet_app::Result<std::string> result) {
+          dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
+            if (auto window = weak.get()) {
+              window->sign_in_running_ = false;
+              try {
+                (void)result.get();
+                // the identity comes from auth-status; refresh it, and
+                // confirm the flow in the status bar right away
+                window->LoadAuthStatus();
+                window->SetUpdateStatus(
+                    L"Signed in. You can now reply and like posts.");
+              } catch (std::exception const& e) {
+                window->SetErrorUi(std::string{"Sign-in failed: "} + e.what());
+              }
+            }
+          });
+        });
+  } catch (std::exception const& e) {
+    sign_in_running_ = false;
+    SetErrorUi(e.what());
+  }
+}
+
+winrt::fire_and_forget MainWindow::SignOutConfirmAsync() {
+  auto const weak = get_weak();
+  auto label = TextBlock{};
+  label.Text(L"Sign out of " + signed_in_user_ +
+             L"? You will not be able to reply or like until you sign in "
+             L"again.");
+  label.TextWrapping(TextWrapping::Wrap);
+  ContentDialog dialog;
+  dialog.Title(winrt::box_value(winrt::hstring(L"Sign out")));
+  dialog.Content(label);
+  dialog.PrimaryButtonText(L"Sign out");
+  dialog.CloseButtonText(L"Cancel");
+  dialog.DefaultButton(winrt::Microsoft::UI::Xaml::Controls::ContentDialogButton::Primary);
+  if (auto window = weak.get()) {
+    dialog.XamlRoot(window->Content().XamlRoot());
+  }
+  auto const result = co_await dialog.ShowAsync();
+  if (result != winrt::Microsoft::UI::Xaml::Controls::ContentDialogResult::Primary) {
+    co_return;
+  }
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) co_return;
+  auto const dispatcher = DispatcherQueue();
+  try {
+    rivet_app::API api(*backend);
+    (void)api.auth_sign_out_async(
+        [dispatcher, weak](rivet_app::Result<void> result) {
+          dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
+            if (auto window = weak.get()) {
+              try {
+                result.get();
+                window->signed_in_user_.clear();
+                window->ApplySignInState();
+                window->SetUpdateStatus(L"Signed out.");
+              } catch (std::exception const& e) {
+                window->SetErrorUi(std::string{"Sign-out failed: "} + e.what());
+              }
+            }
+          });
+        });
+  } catch (std::exception const& e) {
+    SetErrorUi(e.what());
+  }
+}
+
+winrt::fire_and_forget MainWindow::ReplyDialogAsync() {
+  if (open_topic_id_ == 0 || signed_in_user_.empty()) co_return;
+  auto const weak = get_weak();
+  TextBox box;
+  box.PlaceholderText(L"Write your reply in Markdown\u2026");
+  box.TextWrapping(TextWrapping::Wrap);
+  box.AcceptsReturn(true);
+  box.Height(170);
+  auto label = TextBlock{};
+  label.Text(L"Posting as " + signed_in_user_ +
+             L". Discourse posts are Markdown.");
+  label.TextWrapping(TextWrapping::Wrap);
+  label.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 10});
+  auto panel = StackPanel{};
+  panel.Children().Append(label);
+  panel.Children().Append(box);
+  ContentDialog dialog;
+  dialog.Title(winrt::box_value(winrt::hstring(L"Reply")));
+  dialog.Content(panel);
+  dialog.PrimaryButtonText(L"Reply");
+  dialog.CloseButtonText(L"Cancel");
+  dialog.DefaultButton(winrt::Microsoft::UI::Xaml::Controls::ContentDialogButton::Primary);
+  if (auto window = weak.get()) {
+    dialog.XamlRoot(window->Content().XamlRoot());
+  }
+  auto const result = co_await dialog.ShowAsync();
+  auto const body = narrow(box.Text());
+  auto const topic_id = open_topic_id_;
+  if (result != winrt::Microsoft::UI::Xaml::Controls::ContentDialogResult::Primary ||
+      body.find_first_not_of(" \t\r\n") == std::string::npos) {
+    co_return;
+  }
+
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) co_return;
+  auto const dispatcher = DispatcherQueue();
+  try {
+    rivet_app::API api(*backend);
+    (void)api.post_create_async(
+        std::to_string(topic_id), body,
+        [dispatcher, weak, topic_id](
+            rivet_app::Result<std::vector<std::vector<std::string>>> res) {
+          dispatcher.TryEnqueue(
+              [weak, topic_id, res = std::move(res)]() mutable {
+                if (auto window = weak.get()) {
+                  try {
+                    (void)res.get();
+                    window->SetUpdateStatus(L"Reply posted.");
+                    window->OpenTopic(topic_id);
+                  } catch (std::exception const& e) {
+                    window->SetErrorUi(std::string{"Reply failed: "} + e.what());
+                  }
+                }
+              });
+        });
+  } catch (std::exception const& e) {
+    SetErrorUi(e.what());
+  }
+}
+
+void MainWindow::LikePost(std::int64_t const post_id) {
+  if (signed_in_user_.empty()) return;
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) return;
+  if (auto const reader = reader_) {
+    (void)reader.CoreWebView2().ExecuteScriptAsync(
+        L"threadlyLikePending(" + std::to_wstring(post_id) + L")");
+  }
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  try {
+    rivet_app::API api(*backend);
+    (void)api.like_post_async(
+        std::to_string(post_id),
+        [dispatcher, weak, post_id](rivet_app::Result<bool> result) {
+          dispatcher.TryEnqueue([weak, post_id, result = std::move(result)]() mutable {
+            if (auto window = weak.get()) {
+              bool ok = false;
+              try {
+                ok = result.get();
+              } catch (...) {
+              }
+              if (auto const reader = window->reader_) {
+                (void)reader.CoreWebView2().ExecuteScriptAsync(
+                    L"threadlyLiked(" + std::to_wstring(post_id) + L", " +
+                    (ok ? L"true" : L"false") + L")");
+              }
+              if (!ok) window->SetStatus("Couldn't like that post.");
+            }
+          });
+        });
+  } catch (std::exception const& e) {
+    SetErrorUi(e.what());
+  }
+}
+
 }  // namespace winrt::RivetHost::implementation

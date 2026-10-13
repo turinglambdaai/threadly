@@ -22,6 +22,7 @@ struct PostRow: Identifiable, Hashable {
     let avatarURL: String
     let html: String
     let createdAt: String
+    let postId: Int
 
     var id: Int { number }
 }
@@ -106,16 +107,15 @@ final class ThreadlyStore: ObservableObject {
     }
 
     /// Opens the forum approval page in the browser, then shows the
-    /// paste-the-code sheet.
+    /// paste-the-code sheet. The browser open rides the backend's
+    /// open-url event (handleEvent) — auth-begin both fires the event and
+    /// returns the URL, so opening here too would open two tabs.
     func beginSignIn() {
         guard let api else { return }
         Task {
             do {
-                let url = try await api.auth_begin()
+                _ = try await api.auth_begin()
                 await MainActor.run { self.signInStage = .awaitingCode }
-                if let u = URL(string: url) {
-                    NSWorkspace.shared.open(u)
-                }
             } catch {
                 await MainActor.run { self.statusLine = "Sign-in failed: \(error)" }
             }
@@ -181,6 +181,24 @@ final class ThreadlyStore: ObservableObject {
         }
     }
 
+    // MARK: - likes (M2 write path)
+
+    /// Called from the thread webview's JS bridge. The RPC reports
+    /// success/failure; the view then moves the button via JS so the
+    /// shown state always matches the server.
+    func likePost(_ postId: Int, completion: @escaping (Bool) -> Void) {
+        guard let api else { return }
+        Task {
+            let ok = (try? await api.like_post(post_id: String(postId))) ?? false
+            await MainActor.run {
+                if !ok {
+                    self.statusLine = "Couldn't like that post."
+                }
+                completion(ok)
+            }
+        }
+    }
+
     func handleEvent(_ event: RivetEvent) {
         switch event {
         case .notify(let message):
@@ -215,6 +233,8 @@ final class ThreadlyStore: ObservableObject {
             case .notifications:
                 let rows = try await api.notifications_list()
                 notifications = rows.map(Self.notification(from:))
+                // the forum marks notifications read on view; mirror that
+                try? await api.notifications_mark_read()
             case .category(let id, let slug):
                 let rows = try await api.category_topics_list(slug: slug, id: String(id))
                 topics = rows.map(Self.topic(fromLatest:))
@@ -325,14 +345,16 @@ final class ThreadlyStore: ObservableObject {
     }
 
     private static func post(from row: [String]) -> PostRow? {
-        // topic-post row = (author avatar-url cooked-html created-at post-number)
+        // topic-post row = (author avatar-url cooked-html created-at
+        //                   post-number post-id)
         guard row.count >= 5 else { return nil }
         return PostRow(
             number: Int(row[4]) ?? 0,
             author: row[0],
             avatarURL: row[1],
             html: row[2],
-            createdAt: row[3])
+            createdAt: row[3],
+            postId: row.count > 5 ? Int(row[5]) ?? 0 : 0)
     }
 
     private static func notification(from row: [String]) -> NotificationRow {

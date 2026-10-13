@@ -7,7 +7,7 @@ public enum RivetGeneratedConfig {
     public static let moduleName = "backend"
     public static let entryName = "start"
     public static let displayName = "Threadly"
-    public static let version = "0.7.0"
+    public static let version = "0.8.0"
     public static let build: Int64 = 1
     public static let identifier = "site.jrtx.threadly"
     public static let releaseChannel = "stable"
@@ -105,82 +105,86 @@ public struct RivetAPI: Sendable {
     public init(client: RivetClient) { self.client = client }
 
     public func auth_begin() async throws -> String {
-        let result = try await client.call("auth-begin", arguments: [])
-        return try decode_String(result)
+        let rivetResult = try await client.call("auth-begin", arguments: [])
+        return try decode_String(rivetResult)
     }
     public func auth_complete(code: String) async throws -> String {
-        let result = try await client.call("auth-complete", arguments: [encode_String(code)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("auth-complete", arguments: [encode_String(code)])
+        return try decode_String(rivetResult)
     }
     public func auth_sign_out() async throws -> Void {
-        let result = try await client.call("auth-sign-out", arguments: [])
-        return try decode_Void(result)
+        let rivetResult = try await client.call("auth-sign-out", arguments: [])
+        return try decode_Void(rivetResult)
     }
     public func auth_status() async throws -> RivetTypes.AuthStatus {
-        let result = try await client.call("auth-status", arguments: [])
-        return try decode_AuthStatus(result)
+        let rivetResult = try await client.call("auth-status", arguments: [])
+        return try decode_AuthStatus(rivetResult)
     }
     public func categories_list() async throws -> [[String]] {
-        let result = try await client.call("categories-list", arguments: [])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("categories-list", arguments: [])
+        return try decode__List_List_String_(rivetResult)
     }
     public func category_topics_list(slug: String, id: String) async throws -> [[String]] {
-        let result = try await client.call("category-topics-list", arguments: [encode_String(slug), encode_String(id)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("category-topics-list", arguments: [encode_String(slug), encode_String(id)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func health() async throws -> String {
-        let result = try await client.call("health", arguments: [])
-        return try decode_String(result)
+        let rivetResult = try await client.call("health", arguments: [])
+        return try decode_String(rivetResult)
     }
     public func latest_list(page: Int64, fresh: Bool) async throws -> [[String]] {
-        let result = try await client.call("latest-list", arguments: [encode_Int64(page), encode_Bool(fresh)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("latest-list", arguments: [encode_Int64(page), encode_Bool(fresh)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func like_post(post_id: String) async throws -> Bool {
-        let result = try await client.call("like-post", arguments: [encode_String(post_id)])
-        return try decode_Bool(result)
+        let rivetResult = try await client.call("like-post", arguments: [encode_String(post_id)])
+        return try decode_Bool(rivetResult)
     }
     public func notifications_list() async throws -> [[String]] {
-        let result = try await client.call("notifications-list", arguments: [])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("notifications-list", arguments: [])
+        return try decode__List_List_String_(rivetResult)
+    }
+    public func notifications_mark_read() async throws -> Void {
+        let rivetResult = try await client.call("notifications-mark-read", arguments: [])
+        return try decode_Void(rivetResult)
     }
     public func open_releases() async throws -> Void {
-        let result = try await client.call("open-releases", arguments: [])
-        return try decode_Void(result)
+        let rivetResult = try await client.call("open-releases", arguments: [])
+        return try decode_Void(rivetResult)
     }
     public func post_create(topic_id: String, body: String) async throws -> [[String]] {
-        let result = try await client.call("post-create", arguments: [encode_String(topic_id), encode_String(body)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("post-create", arguments: [encode_String(topic_id), encode_String(body)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func search_list(q: String) async throws -> [[String]] {
-        let result = try await client.call("search-list", arguments: [encode_String(q)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("search-list", arguments: [encode_String(q)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func start_download() async throws -> Void {
-        let result = try await client.call("start-download", arguments: [])
-        return try decode_Void(result)
+        let rivetResult = try await client.call("start-download", arguments: [])
+        return try decode_Void(rivetResult)
     }
     public func topic_open(id: String) async throws -> [[String]] {
-        let result = try await client.call("topic-open", arguments: [encode_String(id)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("topic-open", arguments: [encode_String(id)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func update_check() async throws -> RivetTypes.UpdateCheck {
-        let result = try await client.call("update-check", arguments: [])
-        return try decode_UpdateCheck(result)
+        let rivetResult = try await client.call("update-check", arguments: [])
+        return try decode_UpdateCheck(rivetResult)
     }
     public func update_state() async throws -> RivetTypes.UpdateState {
-        let result = try await client.call("update-state", arguments: [])
-        return try decode_UpdateState(result)
+        let rivetResult = try await client.call("update-state", arguments: [])
+        return try decode_UpdateState(rivetResult)
     }
 
     // Shared state
     public func get_version() async throws -> String {
-        let result = try await client.getState("version")
-        return try decode_String(result)
+        let rivetResult = try await client.getState("version")
+        return try decode_String(rivetResult)
     }
     @discardableResult
     public func set_version(_ value: String) async throws -> String {
-        let result = try await client.setState("version", value: encode_String(value))
-        return try decode_String(result)
+        let rivetResult = try await client.setState("version", value: encode_String(value))
+        return try decode_String(rivetResult)
     }
 }

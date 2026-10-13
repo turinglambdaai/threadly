@@ -7,6 +7,7 @@
 // (refresh during an in-flight search, topic switch during a slow fetch).
 #include <gtk/gtk.h>
 // webkitgtk 6.0 ships a lowercase umbrella header.
+#include <jsc/jsc.h>
 #include <webkit/webkit.h>
 
 #include <atomic>
@@ -56,6 +57,8 @@ struct AppState {
   GtkSearchEntry* search{nullptr};
   GtkButton* back_button{nullptr};
   GtkButton* refresh_button{nullptr};
+  GtkButton* reply_button{nullptr};
+  GtkButton* account_button{nullptr};
   GtkDropDown* category_picker{nullptr};
   GtkLabel* scope_heading{nullptr};
   GtkListBox* topic_list{nullptr};
@@ -83,6 +86,10 @@ struct AppState {
   bool suppress_category_signal{false};
   // Drops completions from superseded loads; every load bumps it.
   std::uint64_t generation{0};
+  // M2 write path: identity gates the composer and like buttons; the
+  // reader's current topic is what the composer targets.
+  std::string signed_in_user;
+  std::int64_t open_topic_id{0};
 };
 
 AppState g_state;
@@ -163,16 +170,24 @@ Category category_for(std::int64_t id) {
 
 // The thread reader: the forum's own cooked HTML with the family reader
 // stylesheet, light and dark. Same 680px column and terracotta accents as
-// the macOS shell.
-std::string reader_document(Rows const& posts) {
+// the macOS shell. Signed in, every post grows a like button wired to the
+// script-message bridge ("like:<id>" out, threadlyLiked() back in).
+std::string reader_document(Rows const& posts, bool const signed_in) {
   std::string body;
   for (auto const& row : posts) {
     if (row.size() < 5) continue;
-    // topic-post row = (author avatar-url cooked-html created-at post-number)
+    // topic-post row = (author avatar-url cooked-html created-at
+    //                   post-number post-id)
     std::string const& author = row[0];
     std::string const& avatar = row[1];
     std::string const& cooked = row[2];
     std::string const date = compact_date(row[3]);
+    std::string like;
+    if (signed_in && row.size() >= 6) {
+      like = "<button class=\"like\" id=\"like-" + row[5] +
+             "\" onclick=\"threadlyLike(" + row[5] +
+             ")\" title=\"Like this post\">&#9825;</button>";
+    }
     body += "<section class=\"post\"><div class=\"meta\">";
     if (!avatar.empty()) {
       body += "<img class=\"avatar\" src=\"" + escape_html(avatar) +
@@ -184,6 +199,7 @@ std::string reader_document(Rows const& posts) {
       body += "<span class=\"dot\">·</span><span>" + escape_html(date) +
               "</span>";
     }
+    body += like;
     body += "</div>" + cooked + "</section>";
   }
 
@@ -207,6 +223,16 @@ body {
 .meta .author { font-weight: 600; color: )HTML"} +
          kAccent + R"HTML(; }
 .meta .dot { opacity: .45; }
+.meta .like {
+  margin-left: auto;
+  background: none; border: none; cursor: pointer;
+  font-size: 15px; line-height: 1;
+  color: rgba(128,128,128,.75); padding: 2px 6px;
+}
+.meta .like:hover { color: )HTML" +
+         kAccent + R"HTML(; }
+.meta .like:disabled { opacity: .35; cursor: default; }
+.meta .like.liked { color: #E0413E; }
 h1,h2,h3 { line-height: 1.3; }
 pre, code { font-family: "Adwaita Mono", ui-monospace, Menlo, monospace; font-size: 13px; }
 code { background: rgba(128,128,128,.14); padding: 1px 5px; border-radius: 4px; }
@@ -219,7 +245,22 @@ a { color: )HTML" +
 aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding: 6px 12px; background: rgba(128,128,128,.08); border-radius: 6px; }
 </style></head>
 <body>)HTML" +
-         body + "</body></html>";
+         body + R"HTML(
+<script>
+function threadlyLike(id) {
+  window.webkit.messageHandlers.threadly.postMessage("like:" + id);
+}
+function threadlyLikePending(id) {
+  var b = document.getElementById('like-' + id);
+  if (b) b.disabled = true;
+}
+function threadlyLiked(id, ok) {
+  var b = document.getElementById('like-' + id);
+  if (!b) return;
+  b.disabled = false;
+  if (ok) { b.classList.add('liked'); b.textContent = '\u2665'; }
+}
+</script></body></html>";
 }
 
 // ---- small UI state helpers ----------------------------------------------------
@@ -298,6 +339,7 @@ void update_scope_heading();
 void load_latest(bool fresh);
 void load_category(std::int64_t id, std::string const& slug);
 void load_notifications();
+void open_topic(TopicRow const& topic);
 
 // ---- completion plumbing -----------------------------------------------------------
 
@@ -401,7 +443,8 @@ int on_posts_delivered(gpointer user_data) {
   std::unique_ptr<rivet_app::Result<Rows>> result(
       static_cast<rivet_app::Result<Rows>*>(user_data));
   try {
-    std::string const document = reader_document(result->get());
+    std::string const document =
+        reader_document(result->get(), !g_state.signed_in_user.empty());
     webkit_web_view_load_html(g_state.web_view, document.c_str(), kForumBase);
     reader_ready();
   } catch (std::exception const& error) {
@@ -412,6 +455,372 @@ int on_posts_delivered(gpointer user_data) {
     reader_ready();
   }
   return G_SOURCE_REMOVE;
+}
+
+// ---- write path helpers (likes, composer, account) -------------------------------
+
+void run_reader_js(std::string const& js) {
+  if (g_state.web_view == nullptr) return;
+  webkit_web_view_evaluate_javascript(g_state.web_view, js.c_str(),
+                                      static_cast<gssize>(js.size()), nullptr,
+                                      nullptr, nullptr, nullptr, nullptr);
+}
+
+void update_write_ui() {
+  if (g_state.reply_button != nullptr) {
+    gtk_widget_set_sensitive(GTK_WIDGET(g_state.reply_button),
+                             !g_state.signed_in_user.empty() &&
+                                     g_state.open_topic_id != 0
+                                 ? TRUE
+                                 : FALSE);
+  }
+  if (g_state.account_button != nullptr) {
+    gtk_widget_set_tooltip_text(
+        GTK_WIDGET(g_state.account_button),
+        g_state.signed_in_user.empty()
+            ? "Sign in with racket.discourse.group"
+            : ("Signed in as " + g_state.signed_in_user +
+               " (click to sign out)")
+                  .c_str());
+  }
+}
+
+int on_like_delivered(gpointer user_data) {
+  std::unique_ptr<std::pair<std::int64_t, bool>> payload(
+      static_cast<std::pair<std::int64_t, bool>*>(user_data));
+  if (!g_state.shutting_down.load(std::memory_order_acquire)) {
+    run_reader_js("threadlyLiked(" + std::to_string(payload->first) + "," +
+                  (payload->second ? "true" : "false") + ")");
+    if (!payload->second) status_show("Couldn't like that post.");
+  }
+  return G_SOURCE_REMOVE;
+}
+
+void like_post(std::int64_t const post_id) {
+  if (g_state.api == nullptr || g_state.signed_in_user.empty()) return;
+  run_reader_js("threadlyLikePending(" + std::to_string(post_id) + ")");
+  (void)g_state.api->like_post_async(
+      std::to_string(post_id), [post_id](rivet_app::Result<bool> result) mutable {
+        bool ok = false;
+        try {
+          ok = result.get();
+        } catch (...) {
+        }
+        g_idle_add(
+            [](gpointer user_data) -> int { return on_like_delivered(user_data); },
+            new std::pair<std::int64_t, bool>(post_id, ok));
+      });
+}
+
+// The reader page posts "like:<id>" from the per-post button.
+void on_script_message(WebKitUserContentManager*, JSCValue* value, gpointer) {
+  if (value == nullptr || !jsc_value_is_string(value)) return;
+  char* text = jsc_value_to_string(value);
+  std::string const message = text != nullptr ? text : "";
+  g_free(text);
+  if (message.rfind("like:", 0) == 0) {
+    like_post(std::strtoll(message.c_str() + 5, nullptr, 10));
+  }
+}
+
+int on_auth_status_delivered(gpointer user_data) {
+  std::unique_ptr<rivet_app::Result<rivet_app::AuthStatus>> result(
+      static_cast<rivet_app::Result<rivet_app::AuthStatus>*>(user_data));
+  try {
+    auto const status = result->get();
+    g_state.signed_in_user =
+        status.status == "in" ? status.username : std::string{};
+  } catch (...) {
+    // identity is decoration at startup; flows surface errors
+  }
+  update_write_ui();
+  return G_SOURCE_REMOVE;
+}
+
+void load_auth_status() {
+  if (g_state.api == nullptr) return;
+  (void)g_state.api->auth_status_async([](rivet_app::Result<rivet_app::AuthStatus> result) mutable {
+    g_idle_add(
+        [](gpointer user_data) -> int { return on_auth_status_delivered(user_data); },
+        new rivet_app::Result<rivet_app::AuthStatus>(std::move(result)));
+  });
+}
+
+int on_simple_status_delivered(gpointer user_data) {
+  std::unique_ptr<std::string> message(static_cast<std::string*>(user_data));
+  if (!g_state.shutting_down.load(std::memory_order_acquire)) {
+    status_show(*message);
+  }
+  load_auth_status();  // re-sync identity/tooltip after account changes
+  return G_SOURCE_REMOVE;
+}
+
+int on_paste_code(gpointer user_data) {
+  // Modal paste sheet: the browser holds the approval page and code.
+  std::unique_ptr<std::string> url(static_cast<std::string*>(user_data));
+  if (g_state.shutting_down.load(std::memory_order_acquire)) {
+    return G_SOURCE_REMOVE;
+  }
+  GtkWidget* paste = gtk_window_new();
+  gtk_window_set_transient_for(GTK_WINDOW(paste), g_state.window);
+  gtk_window_set_modal(GTK_WINDOW(paste), TRUE);
+  gtk_window_set_title(GTK_WINDOW(paste), "Finish signing in");
+  gtk_window_set_default_size(GTK_WINDOW(paste), 480, 140);
+  gtk_window_set_resizable(GTK_WINDOW(paste), FALSE);
+
+  auto* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  gtk_widget_set_margin_top(box, 14);
+  gtk_widget_set_margin_start(box, 14);
+  gtk_widget_set_margin_end(box, 14);
+  gtk_widget_set_margin_bottom(box, 14);
+  auto* label = gtk_label_new(
+      "Approve Threadly in the browser that just opened, copy the code it "
+      "shows, and paste it here.");
+  gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+  auto* entry = gtk_entry_new();
+  // placeholder-text as a property — the setter's availability differs
+  // across GTK 4 minor versions (same reason the search entry uses this).
+  g_object_set(entry, "placeholder-text", "Paste the code", nullptr);
+  auto* buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(buttons, GTK_ALIGN_END);
+  auto* cancel = gtk_button_new_with_label("Cancel");
+  auto* ok = gtk_button_new_with_label("Complete sign-in");
+  gtk_widget_add_css_class(ok, "suggested-action");
+  gtk_box_append(GTK_BOX(buttons), cancel);
+  gtk_box_append(GTK_BOX(buttons), ok);
+  gtk_box_append(GTK_BOX(box), label);
+  gtk_box_append(GTK_BOX(box), entry);
+  gtk_box_append(GTK_BOX(box), buttons);
+  gtk_window_set_child(GTK_WINDOW(paste), box);
+
+  struct PasteContext {
+    GtkWidget* window;
+    GtkWidget* entry;
+  };
+  auto* context = new PasteContext{paste, entry};
+  g_signal_connect_data(
+      ok, "clicked",
+      +[](GtkButton*, gpointer user_data) {
+        auto* context = static_cast<PasteContext*>(user_data);
+        gchar const* text = gtk_editable_get_text(GTK_EDITABLE(context->entry));
+        std::string const code = text != nullptr ? text : "";
+        gtk_window_destroy(GTK_WINDOW(context->window));
+        if (g_state.api == nullptr ||
+            code.find_first_not_of(" \t\r\n") == std::string::npos) {
+          return;
+        }
+        (void)g_state.api->auth_complete_async(
+            code, [](rivet_app::Result<std::string> result) mutable {
+              std::string message;
+              try {
+                (void)result.get();
+                message = "Signed in. You can now reply and like posts.";
+              } catch (std::exception const& error) {
+                message = std::string{"Sign-in failed: "} + error.what();
+              }
+              g_idle_add(
+                  [](gpointer user_data) -> int {
+                    return on_simple_status_delivered(user_data);
+                  },
+                  new std::string(std::move(message)));
+            });
+      },
+      context, [](gpointer user_data, GClosure*) { delete static_cast<PasteContext*>(user_data); },
+      GConnectFlags(0));
+  g_signal_connect_swapped(cancel, "clicked",
+                           G_CALLBACK(gtk_window_destroy), paste);
+  gtk_window_present(GTK_WINDOW(paste));
+  return G_SOURCE_REMOVE;
+}
+
+int on_sign_in_url(gpointer user_data) {
+  std::unique_ptr<std::string> url(static_cast<std::string*>(user_data));
+  if (g_state.shutting_down.load(std::memory_order_acquire)) {
+    return G_SOURCE_REMOVE;
+  }
+  // The browser open rides the backend's open-url event (auth-begin both
+  // fires it and returns the URL); this only opens the paste sheet.
+  g_idle_add(on_paste_code, new std::string(*url));
+  return G_SOURCE_REMOVE;
+}
+
+int on_sign_out_confirmed(gpointer) {
+  if (g_state.api != nullptr) {
+    (void)g_state.api->auth_sign_out_async(
+        [](rivet_app::Result<void> result) mutable {
+          std::string message;
+          try {
+            result.get();
+            message = "Signed out.";
+          } catch (std::exception const& error) {
+            message = std::string{"Sign-out failed: "} + error.what();
+          }
+          g_idle_add(
+              [](gpointer user_data) -> int {
+                return on_simple_status_delivered(user_data);
+              },
+              new std::string(std::move(message)));
+        });
+  }
+  return G_SOURCE_REMOVE;
+}
+
+void on_account_clicked(GtkButton*, gpointer) {
+  if (g_state.api == nullptr) return;
+  if (!g_state.signed_in_user.empty()) {
+    // confirm, then sign out
+    GtkWidget* confirm = gtk_message_dialog_new(
+        g_state.window, GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
+        GTK_BUTTONS_OK_CANCEL, "Sign out of %s?", g_state.signed_in_user.c_str());
+    gtk_message_dialog_format_secondary_text(
+        GTK_MESSAGE_DIALOG(confirm),
+        "You will not be able to reply or like until you sign in again.");
+    gtk_window_set_title(GTK_WINDOW(confirm), "Sign out");
+    g_signal_connect(
+        confirm, "response",
+        +[](GtkDialog* dialog, gint response, gpointer) {
+          gtk_window_destroy(GTK_WINDOW(dialog));
+          if (response == GTK_RESPONSE_OK) {
+            g_idle_add(on_sign_out_confirmed, nullptr);
+          }
+        },
+        nullptr);
+    gtk_window_present(GTK_WINDOW(confirm));
+    return;
+  }
+  (void)g_state.api->auth_begin_async(
+      [](rivet_app::Result<std::string> result) mutable {
+        std::string url;
+        std::string error;
+        try {
+          url = result.get();
+        } catch (std::exception const& e) {
+          error = e.what();
+        }
+        if (!error.empty()) {
+          g_idle_add(
+              [](gpointer user_data) -> int {
+                return on_simple_status_delivered(user_data);
+              },
+              new std::string("Sign-in failed: " +
+                              *static_cast<std::string*>(user_data)));
+          return;
+        }
+        g_idle_add(
+            [](gpointer user_data) -> int { return on_sign_in_url(user_data); },
+            new std::string(std::move(url)));
+      });
+}
+
+int on_reply_result_delivered(gpointer user_data) {
+  std::unique_ptr<std::string> error(static_cast<std::string*>(user_data));
+  if (g_state.shutting_down.load(std::memory_order_acquire)) {
+    return G_SOURCE_REMOVE;
+  }
+  if (error->empty()) {
+    status_show("Reply posted.");
+    // reload the thread so the new post appears
+    for (TopicRow const& topic : g_state.topics) {
+      if (topic.id == g_state.open_topic_id) {
+        open_topic(topic);
+        break;
+      }
+    }
+  } else {
+    status_show("Reply failed: " + *error);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+int on_reply_composer(gpointer) {
+  if (g_state.shutting_down.load(std::memory_order_acquire) ||
+      g_state.open_topic_id == 0 || g_state.signed_in_user.empty()) {
+    return G_SOURCE_REMOVE;
+  }
+  GtkWidget* composer = gtk_window_new();
+  gtk_window_set_transient_for(GTK_WINDOW(composer), g_state.window);
+  gtk_window_set_modal(GTK_WINDOW(composer), TRUE);
+  gtk_window_set_title(GTK_WINDOW(composer), "Reply");
+  gtk_window_set_default_size(GTK_WINDOW(composer), 560, 320);
+
+  auto* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  gtk_widget_set_margin_top(box, 14);
+  gtk_widget_set_margin_start(box, 14);
+  gtk_widget_set_margin_end(box, 14);
+  gtk_widget_set_margin_bottom(box, 14);
+  auto* label = gtk_label_new(
+      ("Posting as " + g_state.signed_in_user +
+       ". Discourse posts are Markdown.")
+          .c_str());
+  gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+  auto* scrolled = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(scrolled, TRUE);
+  auto* text_view = gtk_text_view_new();
+  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD_CHAR);
+  gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view)),
+                           "", 0);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), text_view);
+  auto* buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(buttons, GTK_ALIGN_END);
+  auto* cancel = gtk_button_new_with_label("Cancel");
+  auto* ok = gtk_button_new_with_label("Reply");
+  gtk_widget_add_css_class(ok, "suggested-action");
+  gtk_box_append(GTK_BOX(buttons), cancel);
+  gtk_box_append(GTK_BOX(buttons), ok);
+  gtk_box_append(GTK_BOX(box), label);
+  gtk_box_append(GTK_BOX(box), scrolled);
+  gtk_box_append(GTK_BOX(box), buttons);
+  gtk_window_set_child(GTK_WINDOW(composer), box);
+
+  struct ReplyContext {
+    GtkWidget* window;
+    GtkTextView* text_view;
+  };
+  auto* context = new ReplyContext{composer, GTK_TEXT_VIEW(text_view)};
+  g_signal_connect_data(
+      ok, "clicked",
+      +[](GtkButton*, gpointer user_data) {
+        auto* context = static_cast<ReplyContext*>(user_data);
+        auto* buffer = gtk_text_view_get_buffer(context->text_view);
+        GtkTextIter begin;
+        GtkTextIter end;
+        gtk_text_buffer_get_bounds(buffer, &begin, &end);
+        gchar* raw = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+        std::string const body = raw != nullptr ? raw : "";
+        g_free(raw);
+        std::int64_t const topic_id = g_state.open_topic_id;
+        gtk_window_destroy(GTK_WINDOW(context->window));
+        if (g_state.api == nullptr ||
+            body.find_first_not_of(" \t\r\n") == std::string::npos) {
+          return;
+        }
+        (void)g_state.api->post_create_async(
+            std::to_string(topic_id), body,
+            [](rivet_app::Result<Rows> result) mutable {
+              std::string error;
+              try {
+                (void)result.get();
+              } catch (std::exception const& e) {
+                error = e.what();
+              }
+              g_idle_add(
+                  [](gpointer user_data) -> int {
+                    return on_reply_result_delivered(user_data);
+                  },
+                  new std::string(std::move(error)));
+            });
+      },
+      context, [](gpointer user_data, GClosure*) { delete static_cast<ReplyContext*>(user_data); },
+      GConnectFlags(0));
+  g_signal_connect_swapped(cancel, "clicked",
+                           G_CALLBACK(gtk_window_destroy), composer);
+  gtk_window_present(GTK_WINDOW(composer));
+  return G_SOURCE_REMOVE;
+}
+
+void on_reply_clicked(GtkButton*, gpointer) {
+  g_idle_add(on_reply_composer, nullptr);
 }
 
 // ---- actions -------------------------------------------------------------------------
@@ -513,6 +922,8 @@ void run_search(std::string const& query) {
 
 void open_topic(TopicRow const& topic) {
   if (g_state.api == nullptr) return;
+  g_state.open_topic_id = topic.id;
+  update_write_ui();
   reader_loading();
   (void)g_state.api->topic_open_async(
       std::to_string(topic.id), [](rivet_app::Result<Rows> result) mutable {
@@ -533,6 +944,11 @@ void load_notifications() {
       [](rivet_app::Result<Rows> result) mutable {
         g_idle_add(on_rows_delivered,
                    wrap_result(g_state.generation, std::move(result)));
+        // the forum marks notifications read on view; mirror that
+        if (g_state.api != nullptr) {
+          (void)g_state.api->notifications_mark_read_async(
+              [](rivet_app::Result<void>) {});
+        }
       });
 }
 
@@ -635,6 +1051,21 @@ int on_backend_finished(gpointer) {
                 [](gpointer user_data) -> int { return on_notify(user_data); },
                 new std::string(
                     std::get<rivet_app::NotifyEvent>(event).value));
+          } else if (std::holds_alternative<rivet_app::Open_urlEvent>(event)) {
+            // auth-begin and open-releases hand URLs over; open in the
+            // user's browser.
+            g_idle_add(
+                [](gpointer user_data) -> int {
+                  std::unique_ptr<std::string> url(
+                      static_cast<std::string*>(user_data));
+                  if (!g_state.shutting_down.load(std::memory_order_acquire)) {
+                    (void)g_app_info_launch_default_for_uri(url->c_str(),
+                                                           nullptr, nullptr);
+                  }
+                  return G_SOURCE_REMOVE;
+                },
+                new std::string(
+                    std::get<rivet_app::Open_urlEvent>(event).value));
           }
         } catch (...) {
           // Unknown events are forward-compat; ignore.
@@ -642,6 +1073,7 @@ int on_backend_finished(gpointer) {
       });
 
   load_latest(false);
+  load_auth_status();
   return G_SOURCE_REMOVE;
 }
 
@@ -724,13 +1156,24 @@ GtkWidget* build_sidebar() {
   g_state.scope_heading = GTK_LABEL(heading);
   gtk_widget_set_halign(heading, GTK_ALIGN_START);
   gtk_widget_set_hexpand(heading, TRUE);
+  auto* reply = gtk_button_new_from_icon_name("mail-reply-sender-symbolic");
+  gtk_widget_set_tooltip_text(reply, "Reply to this topic");
+  gtk_widget_set_sensitive(reply, FALSE);
+  auto* account = gtk_button_new_from_icon_name("avatar-default-symbolic");
+  gtk_widget_set_tooltip_text(account, "Sign in with racket.discourse.group");
   auto* refresh = gtk_button_new_from_icon_name("view-refresh-symbolic");
   gtk_widget_set_tooltip_text(refresh, "Refresh");
   gtk_box_append(GTK_BOX(header), back);
   gtk_box_append(GTK_BOX(header), heading);
+  gtk_box_append(GTK_BOX(header), reply);
+  gtk_box_append(GTK_BOX(header), account);
   gtk_box_append(GTK_BOX(header), refresh);
   g_state.back_button = GTK_BUTTON(back);
   g_state.refresh_button = GTK_BUTTON(refresh);
+  g_state.reply_button = GTK_BUTTON(reply);
+  g_state.account_button = GTK_BUTTON(account);
+  g_signal_connect(reply, "clicked", G_CALLBACK(on_reply_clicked), nullptr);
+  g_signal_connect(account, "clicked", G_CALLBACK(on_account_clicked), nullptr);
 
   // Discourse category navigation: a drop-down whose index 0 is Latest
   // and whose remaining entries are the forum's categories in order.
@@ -791,7 +1234,15 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_paned_set_start_child(GTK_PANED(pane), build_sidebar());
   gtk_paned_set_shrink_start_child(GTK_PANED(pane), FALSE);
 
-  auto* web = webkit_web_view_new();
+  // The like bridge rides a named script message on the reader's content
+  // manager; the JS side is the same window.webkit.messageHandlers API
+  // Safari/WebView use.
+  auto* content_manager = webkit_user_content_manager_new();
+  webkit_user_content_manager_register_script_message_handler(content_manager,
+                                                              "threadly");
+  g_signal_connect(content_manager, "script-message-received::threadly",
+                   G_CALLBACK(on_script_message), nullptr);
+  auto* web = webkit_web_view_new_with_user_content_manager(content_manager);
   auto* stack = gtk_stack_new();
   gtk_stack_add_named(GTK_STACK(stack), build_welcome(), "welcome");
   gtk_stack_add_named(GTK_STACK(stack), build_loading(), "loading");

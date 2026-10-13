@@ -35,6 +35,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   void CategoryPicker_SelectionChanged(
       winrt::Windows::Foundation::IInspectable const& sender,
       winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& args);
+  void Account_Click(winrt::Windows::Foundation::IInspectable const& sender,
+                     Microsoft::UI::Xaml::RoutedEventArgs const& args);
+  void Reply_Click(winrt::Windows::Foundation::IInspectable const& sender,
+                   Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
  private:
   struct TopicRow {
@@ -56,6 +60,17 @@ struct MainWindow : MainWindowT<MainWindow> {
   void SetErrorUi(std::string const& message);
   void SetStatus(std::string const& message);
   void SetUpdateStatus(std::wstring const& message);
+
+  // Account (M2 write path): sign-in via the forum's user API key flow,
+  // identity tooltip, sign-out; gates the composer and the like buttons.
+  void LoadAuthStatus();
+  void ApplySignInState();
+  winrt::fire_and_forget AccountFlowAsync();
+  winrt::fire_and_forget PasteCodeDialogAsync(std::wstring const& url);
+  winrt::fire_and_forget SignOutConfirmAsync();
+  winrt::fire_and_forget ReplyDialogAsync();
+  void LikePost(std::int64_t post_id);
+
   winrt::fire_and_forget CreateReaderAsync();
   winrt::Microsoft::UI::Xaml::Controls::WebView2 Reader();
 
@@ -93,6 +108,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool suppress_selection_{false};
   bool suppress_category_{false};
   bool update_downloading_{false};
+  // Signed-in identity (empty when signed out) and the topic currently
+  // shown in the reader — the reply composer targets it.
+  std::wstring signed_in_user_;
+  std::int64_t open_topic_id_{0};
+  bool sign_in_running_{false};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer check_timer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer update_timer_{nullptr};
 };
