@@ -260,7 +260,7 @@ function threadlyLiked(id, ok) {
   b.disabled = false;
   if (ok) { b.classList.add('liked'); b.textContent = '\u2665'; }
 }
-</script></body></html>";
+</script></body></html>)HTML";
 }
 
 // ---- small UI state helpers ----------------------------------------------------

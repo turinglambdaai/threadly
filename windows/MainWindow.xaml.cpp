@@ -15,6 +15,8 @@
 namespace winrt::RivetHost::implementation {
 namespace {
 
+namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
+
 std::filesystem::path executable_path() {
   std::wstring buffer(32768, L'\0');
   auto const length = ::GetModuleFileNameW(nullptr, buffer.data(),
@@ -796,22 +798,22 @@ winrt::fire_and_forget MainWindow::AccountFlowAsync() {
 
 winrt::fire_and_forget MainWindow::PasteCodeDialogAsync(std::wstring const&) {
   auto const weak = get_weak();
-  TextBox box;
+  muxc::TextBox box;
   box.PlaceholderText(L"Paste the code the forum shows");
-  auto label = TextBlock{};
+  auto label = muxc::TextBlock{};
   label.Text(L"Approve Threadly in the browser that just opened, copy the "
              L"code it displays, and paste it here.");
-  label.TextWrapping(TextWrapping::Wrap);
+  label.TextWrapping(winrt::Microsoft::UI::Xaml::TextWrapping::Wrap);
   label.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 10});
-  auto panel = StackPanel{};
+  auto panel = muxc::StackPanel{};
   panel.Children().Append(label);
   panel.Children().Append(box);
-  ContentDialog dialog;
+  muxc::ContentDialog dialog;
   dialog.Title(winrt::box_value(winrt::hstring(L"Finish signing in")));
   dialog.Content(panel);
   dialog.PrimaryButtonText(L"Complete sign-in");
   dialog.CloseButtonText(L"Cancel");
-  dialog.DefaultButton(winrt::Microsoft::UI::Xaml::Controls::ContentDialogButton::Primary);
+  dialog.DefaultButton(muxc::ContentDialogButton::Primary);
   if (auto window = weak.get()) {
     dialog.XamlRoot(window->Content().XamlRoot());
   }
@@ -857,17 +859,17 @@ winrt::fire_and_forget MainWindow::PasteCodeDialogAsync(std::wstring const&) {
 
 winrt::fire_and_forget MainWindow::SignOutConfirmAsync() {
   auto const weak = get_weak();
-  auto label = TextBlock{};
+  auto label = muxc::TextBlock{};
   label.Text(L"Sign out of " + signed_in_user_ +
              L"? You will not be able to reply or like until you sign in "
              L"again.");
-  label.TextWrapping(TextWrapping::Wrap);
-  ContentDialog dialog;
+  label.TextWrapping(winrt::Microsoft::UI::Xaml::TextWrapping::Wrap);
+  muxc::ContentDialog dialog;
   dialog.Title(winrt::box_value(winrt::hstring(L"Sign out")));
   dialog.Content(label);
   dialog.PrimaryButtonText(L"Sign out");
   dialog.CloseButtonText(L"Cancel");
-  dialog.DefaultButton(winrt::Microsoft::UI::Xaml::Controls::ContentDialogButton::Primary);
+  dialog.DefaultButton(muxc::ContentDialogButton::Primary);
   if (auto window = weak.get()) {
     dialog.XamlRoot(window->Content().XamlRoot());
   }
@@ -903,25 +905,25 @@ winrt::fire_and_forget MainWindow::SignOutConfirmAsync() {
 winrt::fire_and_forget MainWindow::ReplyDialogAsync() {
   if (open_topic_id_ == 0 || signed_in_user_.empty()) co_return;
   auto const weak = get_weak();
-  TextBox box;
+  muxc::TextBox box;
   box.PlaceholderText(L"Write your reply in Markdown\u2026");
-  box.TextWrapping(TextWrapping::Wrap);
+  box.TextWrapping(winrt::Microsoft::UI::Xaml::TextWrapping::Wrap);
   box.AcceptsReturn(true);
   box.Height(170);
-  auto label = TextBlock{};
+  auto label = muxc::TextBlock{};
   label.Text(L"Posting as " + signed_in_user_ +
              L". Discourse posts are Markdown.");
-  label.TextWrapping(TextWrapping::Wrap);
+  label.TextWrapping(winrt::Microsoft::UI::Xaml::TextWrapping::Wrap);
   label.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 10});
-  auto panel = StackPanel{};
+  auto panel = muxc::StackPanel{};
   panel.Children().Append(label);
   panel.Children().Append(box);
-  ContentDialog dialog;
+  muxc::ContentDialog dialog;
   dialog.Title(winrt::box_value(winrt::hstring(L"Reply")));
   dialog.Content(panel);
   dialog.PrimaryButtonText(L"Reply");
   dialog.CloseButtonText(L"Cancel");
-  dialog.DefaultButton(winrt::Microsoft::UI::Xaml::Controls::ContentDialogButton::Primary);
+  dialog.DefaultButton(muxc::ContentDialogButton::Primary);
   if (auto window = weak.get()) {
     dialog.XamlRoot(window->Content().XamlRoot());
   }
