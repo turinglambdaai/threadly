@@ -5,4 +5,4 @@
 
 (provide app-version)
 
-(define app-version "0.8.0")
+(define app-version "0.9.0")
