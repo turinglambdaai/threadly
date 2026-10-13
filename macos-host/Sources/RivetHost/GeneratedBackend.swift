@@ -7,7 +7,7 @@ public enum RivetGeneratedConfig {
     public static let moduleName = "backend"
     public static let entryName = "start"
     public static let displayName = "Threadly"
-    public static let version = "0.6.0"
+    public static let version = "0.7.0"
     public static let build: Int64 = 1
     public static let identifier = "site.jrtx.threadly"
     public static let releaseChannel = "stable"
@@ -136,6 +136,10 @@ public struct RivetAPI: Sendable {
         let result = try await client.call("latest-list", arguments: [encode_Int64(page), encode_Bool(fresh)])
         return try decode__List_List_String_(result)
     }
+    public func like_post(post_id: String) async throws -> Bool {
+        let result = try await client.call("like-post", arguments: [encode_String(post_id)])
+        return try decode_Bool(result)
+    }
     public func notifications_list() async throws -> [[String]] {
         let result = try await client.call("notifications-list", arguments: [])
         return try decode__List_List_String_(result)
@@ -143,6 +147,10 @@ public struct RivetAPI: Sendable {
     public func open_releases() async throws -> Void {
         let result = try await client.call("open-releases", arguments: [])
         return try decode_Void(result)
+    }
+    public func post_create(topic_id: String, raw: String) async throws -> [[String]] {
+        let result = try await client.call("post-create", arguments: [encode_String(topic_id), encode_String(raw)])
+        return try decode__List_List_String_(result)
     }
     public func search_list(q: String) async throws -> [[String]] {
         let result = try await client.call("search-list", arguments: [encode_String(q)])

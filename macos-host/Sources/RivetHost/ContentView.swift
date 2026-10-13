@@ -472,11 +472,22 @@ private struct DetailView: View {
             }
             if let topic = store.selectedTopic {
                 ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        store.replySheetTopic = topic
+                    } label: {
+                        Label("Reply", systemImage: "text.bubble")
+                    }
+                    .disabled(store.replySheetTopic != nil)
+                }
+                ToolbarItem(placement: .primaryAction) {
                     Link(destination: URL(string: "https://racket.discourse.group/t/\(topic.id)")!) {
                         Label("Open on the forum", systemImage: "safari")
                     }
                 }
             }
+        }
+        .sheet(item: $store.replySheetTopic) { topic in
+            ReplySheetView(topic: topic)
         }
     }
 
@@ -678,6 +689,106 @@ struct ThreadWebView: NSViewRepresentable {
     }
 }
 
+
+// MARK: - Reply composer
+
+/// The reply sheet. Signed in → a raw-Markdown editor (Discourse posts are
+/// markdown); signed out → a pointer to the sign-in flow in the sidebar
+/// footer, with a one-click start. Cancel wins over everything.
+private struct ReplySheetView: View {
+    @EnvironmentObject private var store: ThreadlyStore
+    let topic: TopicRow
+    @State private var raw = ""
+    @FocusState private var focused: Bool
+
+    private var canSubmit: Bool {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && store.postingReply == false
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Reply")
+                    .font(.title3.weight(.semibold))
+                Text(topic.title)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(topic.title)
+            }
+
+            if store.signedInUser == nil {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Sign in with your racket.discourse.group account to post a reply.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Spacer()
+                        Button("Not now") { store.replySheetTopic = nil }
+                            .keyboardShortcut(.cancelAction)
+                        Button("Sign in") {
+                            store.replySheetTopic = nil
+                            store.beginSignIn()
+                        }
+                        .keyboardShortcut(.defaultAction)
+                    }
+                }
+                .padding(.top, 4)
+            } else {
+                TextEditor(text: $raw)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .frame(minHeight: 150)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(nsColor: .separatorColor))
+                    )
+                    .overlay(alignment: .topLeading) {
+                        if raw.isEmpty {
+                            Text("Write your reply in Markdown…")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 16)
+                                .padding(.leading, 13)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .focused($focused)
+
+                HStack(spacing: 10) {
+                    Text("Markdown · as \(store.signedInUser ?? "")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if store.postingReply {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Button("Cancel") { store.replySheetTopic = nil }
+                        .keyboardShortcut(.cancelAction)
+                        .disabled(store.postingReply)
+                    Button("Reply") { submit() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!canSubmit)
+                }
+            }
+        }
+        .padding(24)
+        .frame(width: 540)
+        .onAppear { focused = true }
+    }
+
+    private func submit() {
+        guard canSubmit else { return }
+        store.submitReply(to: topic, raw: raw)
+    }
+}
 
 // MARK: - Sign-in sheet
 

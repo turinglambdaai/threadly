@@ -16,6 +16,7 @@
          "core/cache.rkt"
          "core/discourse.rkt"
          "core/paths.rkt"
+         "auth.rkt"
          "version.rkt"
          (prefix-in upd: "update.rkt"))
 
@@ -44,6 +45,8 @@
          "  topic <id>           read a thread"
          "  search <query>       search the archive"
          "  categories           list categories"
+         "  reply <id>           reply to a topic (markdown on stdin;"
+         "                       needs sign-in via the app)"
          "  doctor               local environment check (offline)"
          ""
          "flags:"
@@ -123,6 +126,23 @@
                    (pad (topic-summary-views t) 6)
                    (topic-summary-title t)))))
 
+;; Reply: raw markdown arrives on stdin so pipelines work —
+;;   echo "nice post" | threadly reply 4416
+;; Uses the sign-in state the GUI app wrote (same data dir).
+(define (cmd-reply topic-id)
+  (unless (auth-signed-in?)
+    (displayln "threadly: not signed in — sign in with the Threadly app first.")
+    (exit 2))
+  (define raw (string-trim (port->string (current-input-port))))
+  (when (string=? raw "")
+    (displayln "threadly: empty reply — pipe the markdown body on stdin.")
+    (exit 2))
+  (define created
+    (create-post (string->number topic-id) raw))
+  (displayln (format "posted as #~a (post id ~a)"
+                     (created-post-post-number created)
+                     (created-post-id created))))
+
 ;; offline: data dir writable, cache entry count
 (define (cmd-doctor)
   (define dir (with-handlers ([exn:fail? (lambda (_) #f)]) (ensure-data-dir!)))
@@ -181,6 +201,10 @@
          ["category"
           (match positionals
             [(list slug id) (cmd-category slug id json?)]
+            [_ (displayln (usage) (current-error-port)) (exit 2)])]
+         ["reply"
+          (match positionals
+            [(list id) (cmd-reply id)]
             [_ (displayln (usage) (current-error-port)) (exit 2)])]
          ["update-check" (cmd-update-check)]
          ["doctor" (cmd-doctor)]

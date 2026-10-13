@@ -70,6 +70,8 @@ final class ThreadlyStore: ObservableObject {
     @Published var signedInUser: String?
     @Published var notifications: [NotificationRow] = []
     @Published var signInStage: SignInStage = .idle
+    @Published var replySheetTopic: TopicRow?
+    @Published var postingReply = false
 
     enum SignInStage: Equatable {
         case idle            // no sign-in in progress
@@ -149,6 +151,33 @@ final class ThreadlyStore: ObservableObject {
         Task {
             _ = try? await api.auth_sign_out()
             await MainActor.run { self.signedInUser = nil }
+        }
+    }
+
+    // MARK: - reply (M2 write path)
+
+    /// Posts the raw markdown and reloads the thread so the new post
+    /// appears. Closes the composer on success; on failure it stays open
+    /// and the error lands in the status line.
+    func submitReply(to topic: TopicRow, raw: String) {
+        guard let api else { return }
+        let body = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        postingReply = true
+        Task {
+            do {
+                _ = try await api.post_create(topic_id: String(topic.id), raw: body)
+                await MainActor.run {
+                    self.postingReply = false
+                    self.replySheetTopic = nil
+                }
+                await self.openTopicId(topic.id, title: topic.title)
+            } catch {
+                await MainActor.run {
+                    self.postingReply = false
+                    self.statusLine = "Reply failed: \(error)"
+                }
+            }
         }
     }
 

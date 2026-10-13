@@ -224,16 +224,18 @@
 ;; Signed-in notifications. Rows:
 ;;   (id type-label read-flag created topic-id title username)
 ;; Clicking a row opens topic-id. Unsigned-in → empty rows + notify.
-;; Reply to a topic. → (post-id, post-number) as strings for the host.
-(define-rpc (post-create [topic-id String] [raw String] : (List String String))
+;; Reply to a topic. → one row (post-id post-number); a fixed 2-tuple
+;; isn't a supported Rivet wire type, so it travels like every other
+;; row-listing endpoint.
+(define-rpc (post-create [topic-id String] [raw String] : (List (List String)))
   (with-handlers
       ([exn:fail?
         (lambda (e)
           (notify (exn-message e))
-          (list "" ""))])
+          (list (list "" "")))])
     (define created (create-post (string->number topic-id) raw))
-    (list (~a (d:created-post-id created))
-          (~a (d:created-post-post-number created)))))
+    (list (list (~a (d:created-post-id created))
+                (~a (d:created-post-post-number created))))))
 
 ;; Like a post (needs read|write scope).
 (define-rpc (like-post [post-id String] : Bool)
