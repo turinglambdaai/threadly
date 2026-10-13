@@ -45,7 +45,8 @@
                        posts-count reply-count views like-count category-id)
   #:transparent)
 
-(struct forum-post (id username avatar-template created-at cooked post-number)
+(struct forum-post (id username avatar-template created-at cooked post-number
+                    like-count liked?)
   #:transparent)
 
 (struct search-result (id title created-at posts-count) #:transparent)
@@ -134,12 +135,20 @@
   (define post-stream (hash-ref doc 'post_stream (hasheq)))
   (define posts
     (for/list ([p (in-list (hash-ref post-stream 'posts (list)))])
+      ;; like state lives in actions_summary under the like action (id 2);
+      ;; `acted` only appears on signed-in requests — that's the "you
+      ;; liked this" flag the like buttons render from.
+      (define like-action
+        (for/or ([a (in-list (hash-ref p 'actions_summary (list)))])
+          (and (eq? (hash-ref a 'id 0) 2) a)))
       (forum-post (hash-ref p 'id 0)
                   (hash-ref p 'username "")
                   (hash-ref p 'avatar_template "")
                   (json-clean (hash-ref p 'created_at #f))
                   (hash-ref p 'cooked "")
-                  (hash-ref p 'post_number 0))))
+                  (hash-ref p 'post_number 0)
+                  (or (and like-action (hash-ref like-action 'count #f)) 0)
+                  (and like-action (eq? (json-clean (hash-ref like-action 'acted #f)) #t)))))
   (values topic posts))
 
 ;; /search.json?q=… → (listof search-result)

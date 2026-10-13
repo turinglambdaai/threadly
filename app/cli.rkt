@@ -16,6 +16,7 @@
          "core/cache.rkt"
          "core/discourse.rkt"
          "core/paths.rkt"
+         "ai.rkt"
          "auth.rkt"
          "version.rkt"
          (prefix-in upd: "update.rkt"))
@@ -47,6 +48,11 @@
          "  categories           list categories"
          "  reply <id>           reply to a topic (markdown on stdin;"
          "                       needs sign-in via the app)"
+         "  summary <id>         AI summary of a thread (needs ai-config)"
+         "  translate <id>       AI translation of a thread"
+         "  ai-config            show / set the AI endpoint:"
+         "                       [--base-url U --api-key K --model M"
+         "                        --target-lang L]"
          "  doctor               local environment check (offline)"
          ""
          "flags:"
@@ -143,6 +149,55 @@
                      (created-post-post-number created)
                      (created-post-id created))))
 
+;; ---- M3: AI summary / translation -------------------------------------------
+
+(define (cmd-summary topic-id)
+  (unless (ai-configured?)
+    (displayln "threadly: AI is not configured — see `ai-config`.")
+    (exit 2))
+  (displayln (ai-summarize-topic (string->number topic-id))))
+
+(define (cmd-translate topic-id)
+  (unless (ai-configured?)
+    (displayln "threadly: AI is not configured — see `ai-config`.")
+    (exit 2))
+  (displayln (ai-translate-topic (string->number topic-id))))
+
+;; `ai-config` shows the current settings (key masked); any of
+;; --base-url/--api-key/--model/--target-lang updates and saves.
+(define (cmd-ai-config positionals)
+  (define current (ai-config-read))
+  (define (flag-value name)
+    (let loop ([as positionals])
+      (match as
+        [(cons (== name) (cons v _)) v]
+        [(cons _ rest) (loop rest)]
+        ['() #f])))
+  (define base (or (flag-value "--base-url") (ai-settings-base-url current)))
+  (define key (or (flag-value "--api-key") (ai-settings-api-key current)))
+  (define model (or (flag-value "--model") (ai-settings-model current)))
+  (define lang (or (flag-value "--target-lang")
+                   (ai-settings-target-language current)))
+  (when (or (flag-value "--base-url") (flag-value "--api-key")
+            (flag-value "--model") (flag-value "--target-lang"))
+    (unless (and (non-empty-string? base) (non-empty-string? key))
+      (displayln "threadly: base-url and api-key must both be non-empty.")
+      (exit 2))
+    (ai-config-save! base key model lang)
+    (set! current (ai-config-read)))
+  (define key-shown
+    (if (non-empty-string? (ai-settings-api-key current))
+        (string-append (substring (ai-settings-api-key current)
+                                  0 (min 6 (string-length (ai-settings-api-key current))))
+                       "…")
+        "(not set)"))
+  (displayln "Threadly AI config")
+  (displayln (format "base-url:  ~a" (ai-settings-base-url current)))
+  (displayln (format "api-key:   ~a" key-shown))
+  (displayln (format "model:     ~a" (ai-settings-model current)))
+  (displayln (format "language:  ~a" (ai-settings-target-language current)))
+  (displayln (format "configured: ~a" (if (ai-configured?) "yes" "no"))))
+
 ;; offline: data dir writable, cache entry count
 (define (cmd-doctor)
   (define dir (with-handlers ([exn:fail? (lambda (_) #f)]) (ensure-data-dir!)))
@@ -206,6 +261,15 @@
           (match positionals
             [(list id) (cmd-reply id)]
             [_ (displayln (usage) (current-error-port)) (exit 2)])]
+         ["summary"
+          (match positionals
+            [(list id) (cmd-summary id)]
+            [_ (displayln (usage) (current-error-port)) (exit 2)])]
+         ["translate"
+          (match positionals
+            [(list id) (cmd-translate id)]
+            [_ (displayln (usage) (current-error-port)) (exit 2)])]
+         ["ai-config" (cmd-ai-config positionals)]
          ["update-check" (cmd-update-check)]
          ["doctor" (cmd-doctor)]
          [_ (displayln (format "threadly: unknown command: ~a\n\n~a" command (usage))

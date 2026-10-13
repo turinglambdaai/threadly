@@ -23,6 +23,8 @@ struct PostRow: Identifiable, Hashable {
     let html: String
     let createdAt: String
     let postId: Int
+    let likeCount: Int
+    let liked: Bool
 
     var id: Int { number }
 }
@@ -73,6 +75,10 @@ final class ThreadlyStore: ObservableObject {
     @Published var signInStage: SignInStage = .idle
     @Published var replySheetTopic: TopicRow?
     @Published var postingReply = false
+    @Published var showAIPanel = false
+    @Published var aiPanelTitle = ""
+    @Published var aiPanelText = ""
+    @Published var aiLoading = false
 
     enum SignInStage: Equatable {
         case idle            // no sign-in in progress
@@ -195,6 +201,45 @@ final class ThreadlyStore: ObservableObject {
                     self.statusLine = "Couldn't like that post."
                 }
                 completion(ok)
+            }
+        }
+    }
+
+    // MARK: - M3 reading value-add (summary, translation)
+
+    enum AIKind {
+        case summarize
+        case translate
+    }
+
+    /// Runs summary or translation over the open thread and shows the
+    /// result in a panel. The engine answers "" + a notify event on
+    /// failure, so an empty result just closes the panel (the status line
+    /// carries the reason).
+    func runAI(_ kind: AIKind) {
+        guard let topic = selectedTopic, let api, !aiLoading else { return }
+        aiPanelTitle = kind == .summarize ? "Summary" : "Translation"
+        aiPanelText = ""
+        aiLoading = true
+        showAIPanel = true
+        let topicId = String(topic.id)
+        Task {
+            let result: String
+            do {
+                result = kind == .summarize
+                    ? try await api.ai_summarize(topic_id: topicId)
+                    : try await api.ai_translate(topic_id: topicId)
+            } catch {
+                result = ""
+                await MainActor.run { self.statusLine = "\(kind == .summarize ? "Summary" : "Translation") failed: \(error)" }
+            }
+            await MainActor.run {
+                self.aiLoading = false
+                if result.isEmpty {
+                    self.showAIPanel = false
+                } else {
+                    self.aiPanelText = result
+                }
             }
         }
     }
@@ -346,7 +391,7 @@ final class ThreadlyStore: ObservableObject {
 
     private static func post(from row: [String]) -> PostRow? {
         // topic-post row = (author avatar-url cooked-html created-at
-        //                   post-number post-id)
+        //                   post-number post-id like-count liked)
         guard row.count >= 5 else { return nil }
         return PostRow(
             number: Int(row[4]) ?? 0,
@@ -354,7 +399,9 @@ final class ThreadlyStore: ObservableObject {
             avatarURL: row[1],
             html: row[2],
             createdAt: row[3],
-            postId: row.count > 5 ? Int(row[5]) ?? 0 : 0)
+            postId: row.count > 5 ? Int(row[5]) ?? 0 : 0,
+            likeCount: row.count > 6 ? Int(row[6]) ?? 0 : 0,
+            liked: row.count > 7 && row[7] == "1")
     }
 
     private static func notification(from row: [String]) -> NotificationRow {

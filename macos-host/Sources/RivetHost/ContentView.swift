@@ -473,6 +473,24 @@ private struct DetailView: View {
             if let topic = store.selectedTopic {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
+                        store.runAI(.summarize)
+                    } label: {
+                        Label("Summarize", systemImage: "text.badge.star")
+                    }
+                    .disabled(store.aiLoading)
+                    .help("AI summary of this thread (configure with `threadly ai-config`)")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        store.runAI(.translate)
+                    } label: {
+                        Label("Translate", systemImage: "character.book.closed")
+                    }
+                    .disabled(store.aiLoading)
+                    .help("AI translation of this thread")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
                         store.replySheetTopic = topic
                     } label: {
                         Label("Reply", systemImage: "text.bubble")
@@ -488,6 +506,9 @@ private struct DetailView: View {
         }
         .sheet(item: $store.replySheetTopic) { topic in
             ReplySheetView(topic: topic)
+        }
+        .sheet(isPresented: $store.showAIPanel) {
+            AIPanelView()
         }
     }
 
@@ -618,9 +639,17 @@ struct ThreadWebView: NSViewRepresentable {
             let avatar = post.avatarURL.isEmpty
                 ? ""
                 : "<img class=\"avatar\" src=\"\(escape(post.avatarURL))\" onerror=\"this.style.display='none'\">"
-            let like = signedIn && post.postId > 0
-                ? "<button class=\"like\" id=\"like-\(post.postId)\" onclick=\"threadlyLike(\(post.postId))\" title=\"Like this post\">♡</button>"
-                : ""
+            var like = ""
+            if signedIn && post.postId > 0 {
+                // the forum's own like state: filled heart + count up front
+                let heart = post.liked ? "♥" : "♡"
+                let count = post.likeCount > 0
+                    ? "<span class=\"count\">\(post.likeCount)</span>" : ""
+                let likedClass = post.liked ? " class=\"liked\"" : ""
+                like = "<button\(likedClass) class=\"like\" id=\"like-\(post.postId)\" onclick=\"threadlyLike(\(post.postId))\" title=\"Like this post\">\(heart)\(count)</button>"
+            } else if post.likeCount > 0 {
+                like = "<span class=\"count\">\(post.likeCount) ♥</span>"
+            }
             let meta = """
             <div class="meta">\(avatar)\
             <span class="author">\(escape(post.author))</span>\
@@ -670,6 +699,11 @@ struct ThreadWebView: NSViewRepresentable {
         .meta .like:hover { color: #C15F3C; }
         .meta .like:disabled { opacity: .35; cursor: default; }
         .meta .like.liked { color: #E0413E; }
+        .meta .like .count, .meta .count {
+          font-size: 12px; margin-left: 3px;
+          color: rgba(128,128,128,.95);
+        }
+        .meta .like.liked .count { color: #E0413E; }
         h1,h2,h3 { line-height: 1.3; }
         pre, code {
           font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -698,6 +732,8 @@ struct ThreadWebView: NSViewRepresentable {
         <body>\(body)
         <script>
         function threadlyLike(id) {
+          var b = document.getElementById('like-' + id);
+          if (b && b.classList.contains('liked')) return;  // already liked
           window.webkit.messageHandlers.threadly.postMessage("like:" + id);
         }
         function threadlyLikePending(id) {
@@ -706,9 +742,18 @@ struct ThreadWebView: NSViewRepresentable {
         }
         function threadlyLiked(id, ok) {
           var b = document.getElementById('like-' + id);
-          if (!b) return;
+          if (!b || !ok) return;
           b.disabled = false;
-          if (ok) { b.classList.add('liked'); b.textContent = '♥'; }
+          b.classList.add('liked');
+          var count = b.querySelector('.count');
+          if (!count) {
+            count = document.createElement('span');
+            count.className = 'count';
+            b.appendChild(count);
+          }
+          count.textContent = (parseInt(count.textContent || '0', 10) || 0) + 1;
+          var heart = document.createTextNode('\\u2665');
+          b.insertBefore(heart, count);
         }
         </script></body></html>
         """
@@ -746,6 +791,49 @@ struct ThreadWebView: NSViewRepresentable {
     }
 }
 
+
+// MARK: - AI panel (summary / translation)
+
+/// Result sheet for the M3 toolbar actions: a spinner while the model
+/// works (tens of seconds), selectable plain text once it answers.
+private struct AIPanelView: View {
+    @EnvironmentObject private var store: ThreadlyStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(store.aiPanelTitle)
+                .font(.title3.weight(.semibold))
+            if store.aiLoading {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Asking the model — this can take a while…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 40)
+            } else {
+                ScrollView {
+                    Text(store.aiPanelText)
+                        .font(.body)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            HStack {
+                Text("AI output can be wrong — check the thread.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Done") { store.showAIPanel = false }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 560, height: 460)
+    }
+}
 
 // MARK: - Reply composer
 

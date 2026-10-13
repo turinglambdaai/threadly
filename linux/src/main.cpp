@@ -59,6 +59,8 @@ struct AppState {
   GtkButton* refresh_button{nullptr};
   GtkButton* reply_button{nullptr};
   GtkButton* account_button{nullptr};
+  GtkButton* summarize_button{nullptr};
+  GtkButton* translate_button{nullptr};
   GtkDropDown* category_picker{nullptr};
   GtkLabel* scope_heading{nullptr};
   GtkListBox* topic_list{nullptr};
@@ -184,9 +186,18 @@ std::string reader_document(Rows const& posts, bool const signed_in) {
     std::string const date = compact_date(row[3]);
     std::string like;
     if (signed_in && row.size() >= 6) {
-      like = "<button class=\"like\" id=\"like-" + row[5] +
-             "\" onclick=\"threadlyLike(" + row[5] +
-             ")\" title=\"Like this post\">&#9825;</button>";
+      // topic-post rows carry the forum's like state (count + acted flag)
+      bool const liked = row.size() >= 8 && row[7] == "1";
+      std::string const count =
+          row.size() >= 7 && row[6] != "0"
+              ? "<span class=\"count\">" + row[6] + "</span>"
+              : "";
+      like = "<button class=\"like" + std::string(liked ? " liked" : "") +
+             "\" id=\"like-" + row[5] + "\" onclick=\"threadlyLike(" +
+             row[5] + ")\" title=\"Like this post\">" +
+             (liked ? "&#9829;" : "&#9825;") + count + "</button>";
+    } else if (row.size() >= 7 && row[6] != "0") {
+      like = "<span class=\"count\">" + row[6] + " &#9829;</span>";
     }
     body += "<section class=\"post\"><div class=\"meta\">";
     if (!avatar.empty()) {
@@ -233,6 +244,11 @@ body {
          kAccent + R"HTML(; }
 .meta .like:disabled { opacity: .35; cursor: default; }
 .meta .like.liked { color: #E0413E; }
+.meta .like .count, .meta .count {
+  font-size: 12px; margin-left: 3px;
+  color: rgba(128,128,128,.95);
+}
+.meta .like.liked .count { color: #E0413E; }
 h1,h2,h3 { line-height: 1.3; }
 pre, code { font-family: "Adwaita Mono", ui-monospace, Menlo, monospace; font-size: 13px; }
 code { background: rgba(128,128,128,.14); padding: 1px 5px; border-radius: 4px; }
@@ -248,6 +264,8 @@ aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding
          body + R"HTML(
 <script>
 function threadlyLike(id) {
+  var b = document.getElementById('like-' + id);
+  if (b && b.classList.contains('liked')) return;  // already liked
   window.webkit.messageHandlers.threadly.postMessage("like:" + id);
 }
 function threadlyLikePending(id) {
@@ -256,9 +274,18 @@ function threadlyLikePending(id) {
 }
 function threadlyLiked(id, ok) {
   var b = document.getElementById('like-' + id);
-  if (!b) return;
+  if (!b || !ok) return;
   b.disabled = false;
-  if (ok) { b.classList.add('liked'); b.textContent = '\u2665'; }
+  b.classList.add('liked');
+  var count = b.querySelector('.count');
+  if (!count) {
+    count = document.createElement('span');
+    count.className = 'count';
+    b.appendChild(count);
+  }
+  count.textContent = (parseInt(count.textContent || '0', 10) || 0) + 1;
+  var heart = document.createTextNode('\u2665');
+  b.insertBefore(heart, count);
 }
 </script></body></html>)HTML";
 }
@@ -822,6 +849,112 @@ void on_reply_clicked(GtkButton*, gpointer) {
   g_idle_add(on_reply_composer, nullptr);
 }
 
+// ---- M3 reading value-add (summary, translation) ---------------------------
+
+void set_ai_buttons_sensitive(gboolean const sensitive);
+
+struct AIResult {
+  GObject* label;      // strong ref — the window may already be closed
+  GObject* spinner;
+  std::string text;
+};
+
+int on_ai_delivered(gpointer user_data) {
+  std::unique_ptr<AIResult> result(static_cast<AIResult*>(user_data));
+  if (!g_state.shutting_down.load(std::memory_order_acquire)) {
+    gtk_spinner_stop(GTK_SPINNER(result->spinner));
+    gtk_label_set_text(GTK_LABEL(result->label), result->text.c_str());
+    set_ai_buttons_sensitive(TRUE);
+  }
+  g_object_unref(result->label);
+  g_object_unref(result->spinner);
+  return G_SOURCE_REMOVE;
+}
+
+void set_ai_buttons_sensitive(gboolean const sensitive) {
+  if (g_state.summarize_button != nullptr) {
+    gtk_widget_set_sensitive(GTK_WIDGET(g_state.summarize_button), sensitive);
+  }
+  if (g_state.translate_button != nullptr) {
+    gtk_widget_set_sensitive(GTK_WIDGET(g_state.translate_button), sensitive);
+  }
+}
+
+void run_ai(bool const summarize) {
+  if (g_state.api == nullptr || g_state.open_topic_id == 0) return;
+  GtkWidget* panel = gtk_window_new();
+  gtk_window_set_transient_for(GTK_WINDOW(panel), g_state.window);
+  gtk_window_set_modal(GTK_WINDOW(panel), TRUE);
+  gtk_window_set_title(GTK_WINDOW(panel), summarize ? "Summary" : "Translation");
+  gtk_window_set_default_size(GTK_WINDOW(panel), 560, 420);
+
+  auto* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  gtk_widget_set_margin_top(box, 14);
+  gtk_widget_set_margin_start(box, 14);
+  gtk_widget_set_margin_end(box, 14);
+  gtk_widget_set_margin_bottom(box, 14);
+  auto* working = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  auto* spinner = gtk_spinner_new();
+  gtk_spinner_start(GTK_SPINNER(spinner));
+  auto* working_label =
+      gtk_label_new(summarize ? "Asking the model\u2026" : "Translating\u2026");
+  gtk_box_append(GTK_BOX(working), spinner);
+  gtk_box_append(GTK_BOX(working), working_label);
+  gtk_widget_set_halign(working, GTK_ALIGN_START);
+  auto* scrolled = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(scrolled, TRUE);
+  auto* result_label = gtk_label_new("");
+  gtk_label_set_selectable(GTK_LABEL(result_label), TRUE);
+  gtk_label_set_wrap(GTK_LABEL(result_label), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(result_label), 0.0);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), result_label);
+  gtk_box_append(GTK_BOX(box), working);
+  gtk_box_append(GTK_BOX(box), scrolled);
+  gtk_window_set_child(GTK_WINDOW(panel), box);
+  gtk_window_present(GTK_WINDOW(panel));
+
+  set_ai_buttons_sensitive(FALSE);
+  auto const topic_id = std::to_string(g_state.open_topic_id);
+  // Strong refs: the panel may be closed before the answer lands, and
+  // setting text on an unparented (still-referenced) label is harmless.
+  auto* label_ref = G_OBJECT(g_object_ref(result_label));
+  auto* spinner_ref = G_OBJECT(g_object_ref(spinner));
+  auto const deliver = [label_ref, spinner_ref](std::string text) mutable {
+    g_idle_add(
+        [](gpointer user_data) -> int { return on_ai_delivered(user_data); },
+        new AIResult{label_ref, spinner_ref, std::move(text)});
+  };
+  if (summarize) {
+    (void)g_state.api->ai_summarize_async(
+        topic_id, [deliver](rivet_app::Result<std::string> result) mutable {
+          std::string text;
+          try {
+            auto const answer = result.get();
+            text = answer.empty() ? "The model returned nothing." : answer;
+          } catch (std::exception const& e) {
+            text = std::string{"Failed: "} + e.what();
+          }
+          deliver(std::move(text));
+        });
+  } else {
+    (void)g_state.api->ai_translate_async(
+        topic_id, [deliver](rivet_app::Result<std::string> result) mutable {
+          std::string text;
+          try {
+            auto const answer = result.get();
+            text = answer.empty() ? "The model returned nothing." : answer;
+          } catch (std::exception const& e) {
+            text = std::string{"Failed: "} + e.what();
+          }
+          deliver(std::move(text));
+        });
+  }
+}
+
+void on_summarize_clicked(GtkButton*, gpointer) { run_ai(true); }
+
+void on_translate_clicked(GtkButton*, gpointer) { run_ai(false); }
+
 // ---- actions -------------------------------------------------------------------------
 
 // Drop-down navigation: 0 = Latest, 1 = Notifications, n = category_order[n-2].
@@ -1160,10 +1293,19 @@ GtkWidget* build_sidebar() {
   gtk_widget_set_sensitive(reply, FALSE);
   auto* account = gtk_button_new_from_icon_name("avatar-default-symbolic");
   gtk_widget_set_tooltip_text(account, "Sign in with racket.discourse.group");
+  auto* summarize = gtk_button_new_with_label("Summarize");
+  gtk_widget_set_tooltip_text(
+      summarize, "AI summary of this thread (threadly ai-config)");
+  gtk_widget_set_sensitive(summarize, FALSE);
+  auto* translate = gtk_button_new_with_label("Translate");
+  gtk_widget_set_tooltip_text(translate, "AI translation of this thread");
+  gtk_widget_set_sensitive(translate, FALSE);
   auto* refresh = gtk_button_new_from_icon_name("view-refresh-symbolic");
   gtk_widget_set_tooltip_text(refresh, "Refresh");
   gtk_box_append(GTK_BOX(header), back);
   gtk_box_append(GTK_BOX(header), heading);
+  gtk_box_append(GTK_BOX(header), summarize);
+  gtk_box_append(GTK_BOX(header), translate);
   gtk_box_append(GTK_BOX(header), reply);
   gtk_box_append(GTK_BOX(header), account);
   gtk_box_append(GTK_BOX(header), refresh);
@@ -1171,8 +1313,14 @@ GtkWidget* build_sidebar() {
   g_state.refresh_button = GTK_BUTTON(refresh);
   g_state.reply_button = GTK_BUTTON(reply);
   g_state.account_button = GTK_BUTTON(account);
+  g_state.summarize_button = GTK_BUTTON(summarize);
+  g_state.translate_button = GTK_BUTTON(translate);
   g_signal_connect(reply, "clicked", G_CALLBACK(on_reply_clicked), nullptr);
   g_signal_connect(account, "clicked", G_CALLBACK(on_account_clicked), nullptr);
+  g_signal_connect(summarize, "clicked", G_CALLBACK(on_summarize_clicked),
+                   nullptr);
+  g_signal_connect(translate, "clicked", G_CALLBACK(on_translate_clicked),
+                   nullptr);
 
   // Discourse category navigation: a drop-down whose index 0 is Latest
   // and whose remaining entries are the forum's categories in order.

@@ -39,6 +39,10 @@ struct MainWindow : MainWindowT<MainWindow> {
                      Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void Reply_Click(winrt::Windows::Foundation::IInspectable const& sender,
                    Microsoft::UI::Xaml::RoutedEventArgs const& args);
+  void Summarize_Click(winrt::Windows::Foundation::IInspectable const& sender,
+                       Microsoft::UI::Xaml::RoutedEventArgs const& args);
+  void Translate_Click(winrt::Windows::Foundation::IInspectable const& sender,
+                       Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
  private:
   struct TopicRow {
@@ -70,6 +74,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::fire_and_forget SignOutConfirmAsync();
   winrt::fire_and_forget ReplyDialogAsync();
   void LikePost(std::int64_t post_id);
+  void RunAI(bool const summarize);
+  // Reader document assembly with the forum's like state on each post.
+  void UpdateAIButtons(bool const busy);
 
   winrt::fire_and_forget CreateReaderAsync();
   winrt::Microsoft::UI::Xaml::Controls::WebView2 Reader();

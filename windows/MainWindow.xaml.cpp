@@ -109,9 +109,18 @@ std::string reader_document(
     std::string const date = compact_date(row[3]);
     std::string like;
     if (signed_in && row.size() >= 6) {
-      like = "<button class=\"like\" id=\"like-" + row[5] +
-             "\" onclick=\"threadlyLike(" + row[5] +
-             ")\" title=\"Like this post\">&#9825;</button>";
+      // topic-post rows carry the forum's like state (count + acted flag)
+      bool const liked = row.size() >= 8 && row[7] == "1";
+      std::string const count =
+          row.size() >= 7 && row[6] != "0"
+              ? "<span class=\"count\">" + row[6] + "</span>"
+              : "";
+      like = "<button class=\"like" + std::string(liked ? " liked" : "") +
+             "\" id=\"like-" + row[5] + "\" onclick=\"threadlyLike(" +
+             row[5] + ")\" title=\"Like this post\">" +
+             (liked ? "&#9829;" : "&#9825;") + count + "</button>";
+    } else if (row.size() >= 7 && row[6] != "0") {
+      like = "<span class=\"count\">" + row[6] + " &#9829;</span>";
     }
     body += "<section class=\"post\"><div class=\"meta\">";
     if (!avatar.empty()) {
@@ -157,6 +166,11 @@ body {
 .meta .like:hover { color: #C15F3C; }
 .meta .like:disabled { opacity: .35; cursor: default; }
 .meta .like.liked { color: #E0413E; }
+.meta .like .count, .meta .count {
+  font-size: 12px; margin-left: 3px;
+  color: rgba(128,128,128,.95);
+}
+.meta .like.liked .count { color: #E0413E; }
 h1,h2,h3 { line-height: 1.3; }
 pre, code { font-family: "Cascadia Mono", ui-monospace, Consolas, monospace; font-size: 13px; }
 code { background: rgba(128,128,128,.14); padding: 1px 5px; border-radius: 4px; }
@@ -171,6 +185,8 @@ aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding
            body + R"HTML(
 <script>
 function threadlyLike(id) {
+  var b = document.getElementById('like-' + id);
+  if (b && b.classList.contains('liked')) return;  // already liked
   window.chrome.webview.postMessage("like:" + id);
 }
 function threadlyLikePending(id) {
@@ -179,9 +195,18 @@ function threadlyLikePending(id) {
 }
 function threadlyLiked(id, ok) {
   var b = document.getElementById('like-' + id);
-  if (!b) return;
+  if (!b || !ok) return;
   b.disabled = false;
-  if (ok) { b.classList.add('liked'); b.textContent = '\u2665'; }
+  b.classList.add('liked');
+  var count = b.querySelector('.count');
+  if (!count) {
+    count = document.createElement('span');
+    count.className = 'count';
+    b.appendChild(count);
+  }
+  count.textContent = (parseInt(count.textContent || '0', 10) || 0) + 1;
+  var heart = document.createTextNode('\u2665');
+  b.insertBefore(heart, count);
 }
 </script></body></html>)HTML";
 }
@@ -506,6 +531,7 @@ void MainWindow::OpenTopic(std::int64_t const id) {
   }
   open_topic_id_ = id;
   ApplySignInState();
+  UpdateAIButtons(false);
   Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Visible);
   try {
     rivet_app::API api(*backend);
@@ -958,6 +984,92 @@ winrt::fire_and_forget MainWindow::ReplyDialogAsync() {
               });
         });
   } catch (std::exception const& e) {
+    SetErrorUi(e.what());
+  }
+}
+
+// ---- M3 reading value-add (summary, translation) ----------------------------
+
+void MainWindow::Summarize_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  RunAI(/*summarize=*/true);
+}
+
+void MainWindow::Translate_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  RunAI(/*summarize=*/false);
+}
+
+void MainWindow::UpdateAIButtons(bool const busy) {
+  bool const ready = open_topic_id_ != 0 && !busy;
+  SummarizeButton().IsEnabled(ready);
+  TranslateButton().IsEnabled(ready);
+}
+
+// Shows a live dialog immediately (the model can take tens of seconds)
+// and streams the answer in when the RPC lands. The engine answers ""
+// and fires a notify event on failure, so the dialog says so and the
+// InfoBar carries the reason.
+void MainWindow::RunAI(bool const summarize) {
+  if (open_topic_id_ == 0) return;
+  auto const weak = get_weak();
+  auto const dispatcher = DispatcherQueue();
+  auto const topic_id = std::to_string(open_topic_id_);
+
+  auto label = muxc::TextBlock{};
+  label.TextWrapping(winrt::Microsoft::UI::Xaml::TextWrapping::Wrap);
+  label.IsTextSelectionEnabled(true);
+  label.Text(summarize ? L"Summarizing\u2026" : L"Translating\u2026");
+  auto scroll = muxc::ScrollViewer{};
+  scroll.Content(label);
+  scroll.Height(340);
+  scroll.Width(480);
+  muxc::ContentDialog dialog;
+  dialog.Title(winrt::box_value(winrt::hstring(summarize ? L"Summary"
+                                                         : L"Translation")));
+  dialog.Content(scroll);
+  dialog.CloseButtonText(L"Close");
+  dialog.DefaultButton(muxc::ContentDialogButton::Close);
+  dialog.XamlRoot(Content().XamlRoot());
+  (void)dialog.ShowAsync();
+  UpdateAIButtons(true);
+
+  auto const backend = std::atomic_load(&backend_);
+  if (backend == nullptr || !backend->running()) {
+    UpdateAIButtons(false);
+    SetErrorUi("Racket backend is not running");
+    return;
+  }
+  try {
+    rivet_app::API api(*backend);
+    auto const handler =
+        [dispatcher, weak, label, summarize](
+            rivet_app::Result<std::string> result) mutable {
+          dispatcher.TryEnqueue(
+              [weak, label, summarize, result = std::move(result)]() mutable {
+                if (auto window = weak.get()) {
+                  window->UpdateAIButtons(false);
+                  try {
+                    auto const text = result.get();
+                    label.Text(text.empty()
+                                   ? winrt::hstring(L"The model returned nothing.")
+                                   : winrt::to_hstring(text));
+                  } catch (std::exception const& e) {
+                    label.Text(winrt::to_hstring(std::string{"Failed: "} +
+                                                 e.what()));
+                  }
+                }
+              });
+        };
+    if (summarize) {
+      (void)api.ai_summarize_async(topic_id, handler);
+    } else {
+      (void)api.ai_translate_async(topic_id, handler);
+    }
+  } catch (std::exception const& e) {
+    UpdateAIButtons(false);
     SetErrorUi(e.what());
   }
 }

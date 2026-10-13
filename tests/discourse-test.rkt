@@ -44,7 +44,14 @@
   ;; cooked posts are HTML
   (check-true (string-contains? (forum-post-cooked p) "<"))
   ;; post numbering starts at 1
-  (check-equal? (forum-post-post-number p) 1))
+  (check-equal? (forum-post-post-number p) 1)
+  ;; like state comes from actions_summary (the like action is id 2);
+  ;; `acted` marks "you liked this" and only appears when signed in
+  (check-equal? (forum-post-like-count p) 3)
+  (check-true (forum-post-liked? p))
+  (define q (second posts))
+  (check-equal? (forum-post-like-count q) 1)
+  (check-false (forum-post-liked? q)))
 
 ;; ---- parse-search -----------------------------------------------------------
 

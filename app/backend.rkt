@@ -27,6 +27,7 @@
          "core/cache.rkt"
          "core/discourse.rkt"
          "core/paths.rkt"
+         "ai.rkt"
          "schema.rkt"
          "version.rkt"
          (prefix-in upd: "update.rkt")
@@ -106,7 +107,9 @@
              (or (forum-post-created-at p) "")
              (~a (forum-post-post-number p))
              ;; post id — the like button targets it via the webview bridge
-             (~a (forum-post-id p)))))))
+             (~a (forum-post-id p))
+             (~a (forum-post-like-count p))
+             (if (forum-post-liked? p) "1" "0"))))))
 
 (define-rpc (search-list [q String] : (List (List String)))
   (rows-or-notify
@@ -259,6 +262,32 @@
           (notify (exn-message e))
           (void))])
     (mark-notifications-read)))
+
+;; ---- M3 reading value-add (summaries, translation) ----------------------------
+
+;; Whether an OpenAI-compatible endpoint is configured. Hosts use it to
+;; gate tooltips; the AI RPCs work regardless and raise useful errors.
+(define-rpc (ai-status : Bool)
+  (ai-configured?))
+
+;; Both AI RPCs are long calls (tens of seconds): the engine thread
+;; blocks on the LLM while the backend keeps serving everything else.
+;; Failures surface as a notify + empty string.
+(define-rpc (ai-summarize [topic-id String] : String)
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (notify (exn-message e))
+          "")])
+    (ai-summarize-topic (string->number topic-id))))
+
+(define-rpc (ai-translate [topic-id String] : String)
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (notify (exn-message e))
+          "")])
+    (ai-translate-topic (string->number topic-id))))
 
 (define-rpc (notifications-list : (List (List String)))
   (rows-or-notify

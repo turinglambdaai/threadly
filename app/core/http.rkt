@@ -12,6 +12,7 @@
          racket/list
          racket/port
          racket/string
+         json
          "../version.rkt")
 
 (provide http-user-agent
@@ -22,6 +23,7 @@
          http-get-bytes
          http-get-string
          http-post-form
+         http-post-json
          http-download-file
          form-encode-fields)
 
@@ -159,6 +161,29 @@
           (with-handlers ([exn:fail? void]) (http-conn-close! conn2))
           (follow c2 rh* b2 (add1 hops)))
         (values code resp-headers* resp-body))))
+
+;; POST a JSON body (AI endpoints all speak the OpenAI request shape).
+;; No redirect chasing — APIs don't redirect. → (values code body-bytes)
+(define (http-post-json url-string jsexpr [extra-headers (list)])
+  (define body (string->bytes/utf-8 (jsexpr->string jsexpr)))
+  (define-values (ssl? host port path) (split-url url-string))
+  (define conn (http-conn-open host #:ssl? ssl? #:port port))
+  (define all-headers
+    (append (list (format "User-Agent: ~a" http-user-agent)
+                  "Content-Type: application/json"
+                  (format "Content-Length: ~a" (bytes-length body))
+                  "Connection: close")
+            extra-headers))
+  (define-values (status _resp-headers body-port)
+    (http-conn-sendrecv! conn path
+                         #:method "POST"
+                         #:headers all-headers
+                         #:data body))
+  (define code (status-code status))
+  (define resp-body (port->bytes body-port))
+  (close-input-port body-port)
+  (with-handlers ([exn:fail? void]) (http-conn-close! conn))
+  (values code resp-body))
 
 ;; DELETE with the same header plumbing (Discourse un-like).
 (define (http-delete url-string [extra-headers (list)])

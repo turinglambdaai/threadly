@@ -58,13 +58,33 @@ SwiftUI shell.
 
 - [x] M0 — Discourse engine, disk cache, CLI, macOS SwiftUI shell
 - [x] M1 — Windows and Linux native hosts
-- [ ] M2 — signed-in mode: user API key flow, replies, likes, notifications
-- [ ] M3 — reading value-add: thread summaries, translation
+- [x] M2 — signed-in mode: user API key flow, replies, likes (with the
+      forum's own like state), notifications, mark-as-read — on all
+      three desktop platforms
+- [x] M3 — reading value-add: AI thread summaries and translation over
+      any OpenAI-compatible endpoint (configurable via the CLI)
 - [ ] M4 — mobile: Android host (Rivet's Kotlin platform) and iOS/iPadOS
       host (Rivet's portable Swift layer), matching the family's
       full-platform scope; a watchOS notification companion follows as
       the tail of M4, riding the phone host over Rivet's typed
-      WatchConnectivity layer
+      WatchConnectivity layer. Gated on Rivet's mobile platforms.
+
+## AI features (M3)
+
+Summaries and translation run over any OpenAI-compatible
+chat-completions endpoint. Configure once from the terminal; every host
+and the CLI pick it up:
+
+```bash
+racket app/cli.rkt ai-config --base-url https://api.openai.com/v1 \
+    --api-key sk-... --model gpt-4o-mini --target-lang Chinese
+racket app/cli.rkt summary 4416      # AI summary of a thread
+racket app/cli.rkt translate 4416    # AI translation of a thread
+```
+
+The key is stored 0600 in the data directory and never leaves the
+machine except to the configured endpoint. In the desktop apps, open a
+thread and use the Summarize / Translate toolbar buttons.
 
 ## Build from source
 
