@@ -592,11 +592,12 @@ struct ThreadWebView: NSViewRepresentable {
 
         nonisolated func userContentController(_ userContentController: WKUserContentController,
                                                didReceive message: WKScriptMessage) {
-            guard message.name == "threadly",
-                  let text = message.body as? String,
-                  text.hasPrefix("like:"),
-                  let postId = Int(text.dropFirst(5)) else { return }
+            // message properties are main-actor isolated; parse inside the hop
             Task { @MainActor in
+                guard message.name == "threadly",
+                      let text = message.body as? String,
+                      text.hasPrefix("like:"),
+                      let postId = Int(text.dropFirst(5)) else { return }
                 guard let store = self.store else { return }
                 self.view?.evaluateJavaScript("threadlyLikePending(\(postId))", completionHandler: nil)
                 store.likePost(postId) { ok in
