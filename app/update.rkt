@@ -51,7 +51,6 @@
          current-update-public-key
          current-update-key-id
          current-update-application-id
-         releases-api
          releases-page
          manifest-url
          current-update-base-url
@@ -81,7 +80,6 @@
 (define current-update-key-id "threadly-2026-10")
 (define current-update-application-id "site.jrtx.threadly")
 
-(define releases-api "https://api.github.com/repos/turinglambdaai/threadly/releases/latest")
 (define releases-page "https://github.com/turinglambdaai/threadly/releases/latest")
 
 ;; The moving "latest" location; fetch-update-manifest follows the release
@@ -278,6 +276,19 @@
                          current-update-key-id
                          (rollout-bucket)
                          maximum-download-bytes))
+       ;; rivet/distribution's select-update accepts #:install-kind
+       ;; ('portable 'msi 'appimage 'package-manager) to filter artifacts by
+       ;; the host's install shape, but threadly cannot use it today: the
+       ;; signed feed carries ONLY the portable entries (macos zip,
+       ;; windows zip, linux tar.gz — see scripts/make-update-manifest.sh;
+       ;; deb/rpm/AppImage are human installers, not feed entries). A
+       ;; package-manager or appimage filter would find no matching
+       ;; artifact and report "up-to-date" while an update ships, and the
+       ;; AppImage swap depends on the tar.gz entry to learn the version it
+       ;; derives the sibling .AppImage asset from. The backend also has no
+       ;; channel to learn the host's shape (install_shape()/IsMsiInstall
+       ;; live in the hosts). Revisit when the feed carries per-kind
+       ;; entries; upstream support: rivet/distribution select-update.
        (define candidate (select-update config manifest))
        (cond
          [candidate
