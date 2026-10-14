@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Build update-manifest.json for a release and sign it (docs/UPDATE.md).
+# Build update-manifest.json for a release and sign it — the family
+# signed-wrapper format every rivet/distribution client verifies (see
+# app/update.rkt for the format contract).
 #
 #   scripts/make-update-manifest.sh <tag> <dist-dir> [key-path]
 #

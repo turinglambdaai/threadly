@@ -130,11 +130,11 @@
              (forum-category-color c))))))
 
 ;; ---- updates ---------------------------------------------------------------------------
-;; Family pattern (docs/UPDATE.md): this backend verifies and downloads the
-;; signed artifact; hosts own installation and the silent 4-hour throttle.
-;; update-check returns a typed UpdateCheck record so hosts never parse
-;; localized strings; start-download runs the transfer on a backend worker
-;; thread and hosts poll update-state.
+;; Family pattern (the full contract is app/update.rkt's module header): this
+;; backend verifies and downloads the signed artifact; hosts own installation
+;; and the silent 4-hour throttle. update-check returns a typed UpdateCheck
+;; record so hosts never parse localized strings; start-download runs the
+;; transfer on a backend worker thread and hosts poll update-state.
 
 (define-rpc (update-check : UpdateCheck)
   (with-handlers
@@ -147,6 +147,12 @@
       [(list 'available version)
        (define candidate (upd:current-candidate))
        (define artifact (and candidate (hash-ref candidate 'artifact #f)))
+       ;; Also emitted as the update-available event. The macOS store
+       ;; subscribes (a status line alongside its native UpdateService);
+       ;; the Windows and Linux hosts have no event consumer and follow
+       ;; this RPC's answer plus update-state polling instead. Kept on the
+       ;; wire for the hosts that do subscribe — removal would be a
+       ;; backend contract change for no consumer gain.
        (update-available version)
        (UpdateCheck
         "available" (void) app-version (nullable version)
