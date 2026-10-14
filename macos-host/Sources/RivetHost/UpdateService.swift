@@ -95,6 +95,10 @@ struct UpdateService {
     /// Fetches the latest release manifest, verifies its Ed25519 signature
     /// and compares versions. Silent checks are throttled to once per
     /// throttleSeconds via UserDefaults; manual checks always hit the feed.
+    /// The stamp records a SETTLED check only — one that produced an answer
+    /// (up-to-date or available). Failures leave it alone so the next
+    /// launch retries instead of waiting out the throttle (the Linux
+    /// host's contract; the write used to happen before the check ran).
     func check(manual: Bool) async -> Result<CheckResult, Error> {
         if !manual {
             let last = UserDefaults.standard.double(forKey: "last-update-check")
@@ -102,21 +106,31 @@ struct UpdateService {
                 return .success(.upToDate)
             }
         }
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "last-update-check")
 
         guard installedBundleURL != nil else { return .failure(UpdateError.notInstalled) }
         guard let service else { return .failure(UpdateError.badPublicKey) }
         do {
             let result = try await service.check()
             switch result {
-            case .upToDate: return .success(.upToDate)
-            case .available(let manifest): return .success(.available(manifest))
+            case .upToDate:
+                Self.recordSettledCheck()
+                return .success(.upToDate)
+            case .available(let manifest):
+                Self.recordSettledCheck()
+                return .success(.available(manifest))
             }
         } catch let error as RivetUpdateError {
             return .failure(Self.map(error))
         } catch {
             return .failure(error)
         }
+    }
+
+    /// UserDefaults stays the store; only the write timing changed — a
+    /// settled check (an answer) stamps, a failed check does not.
+    private static func recordSettledCheck() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970,
+                                  forKey: "last-update-check")
     }
 
     /// Downloads, verifies, swaps the bundle in place and relaunches.

@@ -281,12 +281,18 @@ void MainWindow::RunUpdateCheck(bool silent) {
     }
     dispatcher.TryEnqueue([weak, silent, ok, check,
                            failure = std::move(failure)]() mutable {
-      // Stamp the throttle on every terminal path.
       auto window = weak.get();
       if (!window) {
         return;
       }
-      write_throttle_stamp();
+      // Stamp only a settled check — one the backend answered with a
+      // status. A transport-level failure never happened (the Linux
+      // host's contract), so the stamp is left alone and the next launch
+      // retries instead of waiting out the throttle. The stamp used to be
+      // written on every terminal path, failed transfers included.
+      if (ok) {
+        write_throttle_stamp();
+      }
       window->HandleUpdateCheckResult(ok, check, failure, silent);
     });
   }).detach();
