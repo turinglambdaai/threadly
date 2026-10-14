@@ -66,6 +66,20 @@ for compatibility. X11 and XWayland are best-effort paths, not release gates,
 and Rivet does not add X11-only application APIs. See
 [Linux display policy](../../../docs/linux-display.md).
 
+## Updates
+
+The host consumes the shared backend update surface (`update-check`,
+`start-download`, `update-state`): one silent launch check throttled to once
+per 4 hours (a unix-epoch stamp file under the temp dir — the Windows host's
+local-file storage), a "Check for Updates…" header entry that bypasses the
+throttle, a consent dialog, 400 ms state polling, and a hand-off keyed on
+the install shape — `APPIMAGE` set means the backend has already swapped the
+sibling `.AppImage` over the running image (checksummed against its release
+`.sha256` sidecar), so the host only asks to re-exec; `/opt/threadly` or
+`/usr` installs upgrade through the package manager and are never downloaded
+over; anything else hands off the verified tar.gz with an open-folder
+action. Silent checks only ever surface an available update.
+
 ## Honest gaps
 
 - Production releases use `raco rivet release`: a deterministic self-contained

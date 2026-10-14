@@ -14,7 +14,12 @@
 ;; background thread with progress published to a state box that hosts
 ;; poll through the `update-state` RPC (RVT1 events are thread-local, so a
 ;; background thread cannot emit them). Hosts own installation and the
-;; silent 4-hour throttle (macOS keeps it in UserDefaults).
+;; silent 4-hour throttle (macOS keeps it in UserDefaults, Windows a stamp
+;; file under the temp dir). Linux AppImage installs are the one exception:
+;; start-download! swaps the sibling .AppImage release asset over the
+;; running image in place (checksummed against its .sha256 sidecar), so the
+;; host's only remaining step is the user's consent to re-exec (taskly's
+;; updater semantics).
 ;;
 ;; The sticky rollout bucket lives in <data-dir>/updater-state.json behind
 ;; a one-key write whitelist — the threadly equivalent of taskly's
@@ -31,9 +36,12 @@
 (require crypto
          json
          net/base64
+         net/url
          rivet/distribution
          racket/file
+         racket/list
          racket/path
+         racket/port
          racket/string
          "core/paths.rkt"
          "version.rkt")
@@ -55,6 +63,9 @@
          set-candidate!
          start-download!
          download-with-progress!
+         download-appimage-with-progress!
+         appimage-asset-name
+         appimage-flavor?
          platform-symbol
          architecture-symbol
          installer-extension
@@ -327,6 +338,155 @@
                      (min 100 (quotient (* done 100) total))
                      0)))))
 
+;; ---------- AppImage flavor (Linux installs run from an AppImage) -----------
+;; The feed's linux entry is the tar.gz; AppImage installs update through the
+;; sibling .AppImage release asset. Asset families disagree on arch names —
+;; feed/deb/rpm use x64|arm64, AppImage builds use x86_64|aarch64 — so the
+;; derivation maps the arch before appending. The download lands NEXT TO the
+;; running image (same filesystem → atomic rename) and replaces it after the
+;; sidecar checksum verifies; the host re-execs the replaced image on
+;; consent. The .AppImage asset is not in the signed manifest, so the sidecar
+;; checksum over the same HTTPS origin is its whole trust chain (taskly's
+;; updater semantics).
+
+(define (appimage-flavor?)
+  ;; This backend has no settings store to carry an install-flavor key, so
+  ;; the AppImage runtime's own env marker is the install-shape signal —
+  ;; the same marker the Linux host's install_shape() reads first.
+  (and (eq? (platform-symbol) 'linux)
+       (let ([image (getenv "APPIMAGE")])
+         (and image (non-empty-string? image)))))
+
+;; Pure so tests can pin the derivation — the arch-name mapping is the trap.
+(define (appimage-asset-name tar-gz-filename architecture)
+  (unless (string-suffix? tar-gz-filename ".tar.gz")
+    (error 'appimage-asset-name "not a tar.gz filename: ~a" tar-gz-filename))
+  (define stem
+    (substring tar-gz-filename 0 (- (string-length tar-gz-filename) 7)))
+  (define feed-arch (string-append "-" (symbol->string architecture)))
+  (unless (string-suffix? stem feed-arch)
+    (error 'appimage-asset-name
+           "feed filename does not end in ~a: ~a" feed-arch stem))
+  (define appimage-arch
+    (case architecture [(arm64) "aarch64"] [else "x86_64"]))
+  (string-append (substring stem 0 (- (string-length stem)
+                                      (string-length feed-arch)))
+                 "-"
+                 appimage-arch
+                 ".AppImage"))
+
+(define (appimage-artifact-urls candidate)
+  (define url (update-artifact-url (update-candidate-artifact candidate)))
+  (define filename
+    (last (string-split (car (string-split url "?")) "/")))
+  (define appimage-name
+    (appimage-asset-name filename (architecture-symbol)))
+  (values (string-replace url filename appimage-name)
+          (string-append (string-replace url filename appimage-name)
+                         ".sha256")))
+
+(define (appimage-download-target)
+  ;; $APPIMAGE (set by the AppImage runtime) points at the running image;
+  ;; stage the download next to it so the final rename stays on one device.
+  (define self (getenv "APPIMAGE"))
+  (unless (and self (non-empty-string? self))
+    (error 'start-download "APPIMAGE is not set; not running as an AppImage"))
+  (values self
+          (make-temporary-file "threadly-update-~a.AppImage"
+                               #f
+                               (path-only self))))
+
+(define (fetch-sidecar-sha256! url)
+  ;; sha256sum format: "<hex>  <filename>"; the first token is the digest.
+  (define in (get-pure-port (string->url url)
+                            '("User-Agent: Threadly-Updater/1")
+                            #:redirections 10))
+  (dynamic-wind
+    void
+    (lambda ()
+      (define digest
+        (let ([body (string-trim (port->string in))])
+          (if (string=? body "") "" (first (string-split body)))))
+      (unless (regexp-match? #px"^[0-9a-fA-F]{64}$" digest)
+        (error 'start-download "appimage checksum sidecar has an unexpected shape"))
+      (string-downcase digest))
+    (lambda () (close-input-port in))))
+
+;; AppImage downloads come from the same CDN without a signed manifest, so
+;; the response head is the only total available: open an impure port, parse
+;; Content-Length for the progress percent (0 → indeterminate), and hand the
+;; body port to the copy loop. Connection: close keeps the copy ending at
+;; EOF, like the manifest-verified tar.gz flow rivet drives.
+(define (open-download-with-total! url)
+  (define in (get-impure-port (string->url url)
+                              '("User-Agent: Threadly-Updater/1"
+                                "Connection: close")))
+  (let loop ([total 0])
+    (define line (read-line in 'return-linefeed))
+    (cond
+      [(eof-object? line) (values in 0)]
+      [(non-empty-string? (string-trim line))
+       (define match
+         (regexp-match #px"(?i:^content-length:\\s*(\\d+))" line))
+       (loop (if match (string->number (second match)) total))]
+      [else (values in total)])))
+
+;; Copy with progress; same shape as rivet's download-update loop, and it
+;; feeds the watchdog's stall clock on every read (not just integer percent
+;; changes, so a slow link never false-trips the stall limit).
+(define (copy-with-progress! in out total)
+  (define buffer (make-bytes 65536))
+  (let loop ([done 0] [last-percent -1])
+    (define count (read-bytes-avail! buffer in))
+    (cond
+      [(eof-object? count) done]
+      [else
+       (set-box! last-progress-seconds (current-seconds))
+       (write-bytes buffer out 0 count)
+       (define next (+ done count))
+       (define percent
+         (if (> total 0)
+             (min 100 (quotient (* next 100) total))
+             0))
+       (when (> percent last-percent)
+         (state-set! 'percent percent))
+       (loop next percent)])))
+
+(define (download-appimage-with-progress! candidate)
+  (define-values (appimage-url sidecar-url)
+    (appimage-artifact-urls candidate))
+  (define-values (self temporary) (appimage-download-target))
+  (define expected (fetch-sidecar-sha256! sidecar-url))
+  ;; The staged image is cleaned on every exit — including a watchdog break,
+  ;; which is not an exn:fail and would otherwise orphan a half-written
+  ;; .AppImage beside the running one.
+  (with-handlers ([(lambda (e) (or (exn:fail? e) (exn:break? e)))
+                   (lambda (e)
+                     (when (file-exists? temporary)
+                       (delete-file temporary))
+                     (raise e))])
+    (define-values (in total) (open-download-with-total! appimage-url))
+    (dynamic-wind
+      void
+      (lambda ()
+        (call-with-output-file temporary
+          #:exists 'truncate/replace
+          #:mode 'binary
+          (lambda (out) (copy-with-progress! in out total))))
+      (lambda () (close-input-port in)))
+    (define actual (string-downcase (sha256-file/hex temporary)))
+    (unless (string=? actual expected)
+      (raise-arguments-error 'start-download
+                             "downloaded appimage does not match its checksum sidecar"
+                             "expected" expected
+                             "actual" actual))
+    ;; The replaced image must stay executable: rename carries the temp
+    ;; file's modes, so set them explicitly before the swap. 0o755 =
+    ;; rwxr-xr-x — the setter takes the integer bit form.
+    (file-or-directory-permissions temporary #o755)
+    (rename-file-or-directory temporary self #t)
+    self))
+
 ;; Spawns the worker thread and returns immediately; the host follows
 ;; progress via the update-state RPC. Raises before spawning when there is
 ;; nothing to download (the RPC maps that onto the state's error phase);
@@ -357,8 +517,9 @@
     (thread
      (lambda ()
        ;; The watchdog breaks a stalled worker; exn:break is not an
-       ;; exn:fail, so it needs its own arm — either way rivet's partial
-       ;; cleanup removes the .partial and the phase lands on error
+       ;; exn:fail, so it needs its own arm — either way the staged file
+       ;; is removed (rivet's partial cleanup for the tar.gz flow, the
+       ;; appimage flow's own handler) and the phase lands on error
        ;; (never mid-flight).
        (with-handlers
            ([(lambda (e) (or (exn:fail? e) (exn:break? e)))
@@ -368,7 +529,14 @@
                            (if (exn:break? e)
                                "update download stalled or timed out"
                                (exn-message e))))])
-         (define path (download-with-progress! config candidate destination))
+         (define path
+           (cond
+             [(appimage-flavor?)
+              ;; In-place swap of the sibling .AppImage asset (sidecar-
+              ;; checksummed); downloadedPath is the replaced image itself.
+              (download-appimage-with-progress! candidate)]
+             [else
+              (download-with-progress! config candidate destination)]))
          (state-set! 'phase "downloaded")
          (state-set! 'percent 100)
          (state-set! 'downloadedPath (path->string path))))))

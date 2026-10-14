@@ -16,7 +16,9 @@
          rackunit
          rivet/distribution
          racket/file
+         racket/list
          racket/path
+         racket/string
          racket/tcp
          (file "../app/core/paths.rkt")
          (prefix-in upd: "../app/update.rkt"))
@@ -222,6 +224,120 @@
                   config bad-candidate
                   (build-path test-data-dir "updates" "bad.zip")))))
 
+  (stop-server!))
+
+;; ---- AppImage flavor (Linux in-place swap, ported from taskly) --------------
+
+(test-case "appimage asset derivation maps feed arch names"
+  ;; Feed/deb/rpm say x64|arm64; AppImage builds say x86_64|aarch64 — the
+  ;; mapping is the whole trap.
+  (check-equal?
+   (upd:appimage-asset-name "threadly-9.9.9-linux-x64.tar.gz" 'x64)
+   "threadly-9.9.9-linux-x86_64.AppImage")
+  (check-equal?
+   (upd:appimage-asset-name "threadly-9.9.9-linux-arm64.tar.gz" 'arm64)
+   "threadly-9.9.9-linux-aarch64.AppImage")
+  (check-exn exn:fail?
+             (lambda ()
+               (upd:appimage-asset-name "threadly-9.9.9-linux-x64.zip" 'x64)))
+  (check-exn exn:fail?
+             (lambda ()
+               (upd:appimage-asset-name "threadly-9.9.9-linux.tar.gz" 'x64))))
+
+;; The AppImage flow's two-request shape: requests ending in .sha256 get a
+;; sha256sum-format sidecar line, anything else gets the image bytes.
+(define (serve-appimage-artifacts! payload-bytes payload-digest)
+  (define listener (tcp-listen 0 4 #f "127.0.0.1"))
+  (define-values (_bind-host port-number _peer-host _peer-port)
+    (tcp-addresses listener #t))
+  (define sidecar-text
+    (format "~a  threadly.AppImage\n" payload-digest))
+  (define server
+    (thread
+     (lambda ()
+       (let accept-loop ()
+         (define-values (in out) (tcp-accept listener))
+         (thread
+          (lambda ()
+            (define request-line (read-line in 'return-linefeed))
+            (define path
+              (if (eof-object? request-line)
+                  ""
+                  (let ([m (regexp-match #px"^\\w+\\s+(\\S+)" request-line)])
+                    (if m (second m) ""))))
+            (let drain ()
+              (define line (read-line in 'return-linefeed))
+              (unless (or (eof-object? line) (equal? line "") (equal? line "\r"))
+                (drain)))
+            (cond
+              [(string-suffix? path ".sha256")
+               (write-string
+                (format "HTTP/1.0 200 OK\r\nContent-Length: ~a\r\n\r\n"
+                        (string-length sidecar-text))
+                out)
+               (write-string sidecar-text out)]
+              [else
+               (write-string
+                (format "HTTP/1.0 200 OK\r\nContent-Length: ~a\r\n\r\n"
+                        (bytes-length payload-bytes))
+                out)
+               (write-bytes payload-bytes out)])
+            (close-output-port out)
+            (close-input-port in)))
+         (accept-loop)))))
+  (values port-number
+          (lambda ()
+            (kill-thread server)
+            (tcp-close listener))))
+
+(test-case "appimage download verifies its sidecar and swaps in place"
+  (define-values (port-number stop-server!)
+    (serve-appimage-artifacts! payload payload-sha256))
+  (define image-dir (make-temporary-file "threadly-appimage-~a" 'directory))
+  (define image-path (build-path image-dir "threadly.AppImage"))
+  (call-with-output-file image-path #:exists 'truncate
+    (lambda (out) (write-bytes (make-bytes 16 7) out)))
+  ;; The feed entry's filename shape drives the sidecar/image derivation:
+  ;; the arch suffix must match this machine's architecture symbol.
+  (define feed-url
+    (format "http://127.0.0.1:~a/threadly-9.9.9-linux-~a.tar.gz"
+            port-number
+            (case (upd:architecture-symbol) [(arm64) "arm64"] [else "x64"])))
+  (define config
+    (updater-config upd:current-update-application-id "0.1.0" 'stable
+                    (upd:platform-symbol) (upd:architecture-symbol)
+                    pub "threadly-test" 0 download-limit))
+  (define candidate (select-update config (test-manifest feed-url)))
+  (check-true (update-candidate? candidate))
+
+  ;; $APPIMAGE is the install-shape signal the backend and the Linux host
+  ;; share; point it at a fake running image so the swap stays in the test's
+  ;; own temp dir.
+  (putenv "APPIMAGE" (path->string image-path))
+  (dynamic-wind
+    void
+    (lambda ()
+      (case (system-type 'os)
+        [(linux) (check-true (upd:appimage-flavor?))]
+        [else (check-false (upd:appimage-flavor?))])
+      (parameterize ([current-data-dir test-data-dir])
+        (upd:reset-update-state!)
+        (upd:set-candidate! candidate)
+        (define swapped (upd:download-appimage-with-progress! candidate))
+        (check-equal? swapped (path->string image-path))
+        (check-equal? (file-size image-path) (bytes-length payload))
+        (check-equal? (sha256-file/hex image-path) payload-sha256)
+        (check-equal? (hash-ref (upd:update-state-snapshot) 'percent) 100)
+        ;; the staged temp image was renamed over the running one
+        (check-equal? (length (directory-list image-dir)) 1)
+        ;; the swapped image is executable
+        (check-not-false
+         (memq 'execute (file-or-directory-permissions image-path #f)))))
+    (lambda ()
+      (putenv "APPIMAGE" "")
+      (delete-file image-path)
+      (delete-directory image-dir)))
+  (check-false (upd:appimage-flavor?))  ; env marker restored
   (stop-server!))
 
 (test-case "check against an unreachable feed reports the failed contract"

@@ -6,6 +6,17 @@ All notable changes to Threadly are documented here. Format follows
 ## Unreleased
 
 ### Added
+- Linux update flow, the last host on the shared backend update surface:
+  a silent launch check throttled to once per 4 hours (local stamp file,
+  the Windows host's storage), a "Check for Updates…" header entry that
+  bypasses the throttle, a consent dialog, 400 ms progress polling, and a
+  hand-off keyed on install shape. AppImage installs get an in-place
+  update — the backend swaps the sibling `.AppImage` release asset over
+  the running image, checksummed against its `.sha256` sidecar, and the
+  host only asks to re-exec; `/opt/threadly` and `/usr` installs are
+  pointed at their package manager; portable installs hand off the
+  verified tar.gz with an open-folder action. Silent checks surface only
+  an available update — never a nag.
 - About on every desktop: macOS grows an "About Threadly" app-menu item
   opening a sheet (version, copyright, license line, product site +
   "Report an Issue" links); Windows gets an About button in the sidebar
