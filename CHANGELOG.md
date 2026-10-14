@@ -5,6 +5,49 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.11.0 - 2026-10-14
+
+The last update-engine bypass in the family is gone: the update engine
+moves onto rivet/distribution end to end, and the macOS updater swaps its
+hand-rolled CryptoKit for rivet's RivetUpdate. No new features — this is
+the existing update capability rebuilt on the family engine: a
+user-visible reliability improvement.
+
+### Changed
+- Update engine rebuilt on rivet/distribution: manifest fetch + Ed25519
+  verification through the library (the hand-rolled signed-wrapper parser
+  and the shelled-out OpenSSL 3 are gone), artifact download through
+  download-update (redirect-following fetch, signed-size cap, .partial
+  cleanup, SHA-256 + size verification, atomic rename), a 120 s stall /
+  30 min total watchdog so a stuck download always reaches a terminal
+  phase, and a sticky per-install rollout bucket (crypto-random-bytes,
+  persisted to updater-state.json behind a one-key whitelist). The wire
+  format is unchanged — the same signed update-manifest.json the 0.10.0
+  feed already ships.
+- macOS host updater replaced with a thin adapter over rivet's
+  RivetUpdate module (verification, bounded download, atomic swap with
+  rollback, and the quit/relaunch handoff live in the library); the host
+  no longer imports CryptoKit.
+- Rivet pin raised to v0.11.0 everywhere: ci.yml checkout refs, the
+  release RIVET_COMMIT, and the setup-embed-racket action ref — the last
+  main-branch drift is closed.
+- Linux host consumes the platform as a package library
+  (add_subdirectory + rivet::platform) instead of hand-copied Rivet
+  source lists; Windows host links the rivet-host static project with a
+  shared CRT knob (an unconditional MT forward would break dev builds
+  with LNK2038) instead of compiling Rivet sources into the project.
+- Site: the four stale "0.3.0 released" lines are gone, roadmap/status
+  copy reflects what actually shipped (M1–M3 done, M4 in progress), and
+  the README gains release + platform badges.
+
+### Added
+- User guide (site/guide.html, linked from the site nav): a five-minute
+  start (install → sign in → first topic), the core features (topics,
+  notifications, likes, AI summaries and translation with the
+  `threadly ai-config` 0600 walkthrough), and an FAQ (scopes, data
+  locations, accounts, platforms, updates, uninstall). Bilingual,
+  Chinese-first.
+
 ## 0.10.0 - 2026-10-13
 
 M3 — reading value-add: AI thread summaries and translation on every
