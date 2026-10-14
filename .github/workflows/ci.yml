@@ -31,9 +31,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: turinglambdaai/rivet
+          ref: v0.11.0
           path: rivet
       - name: Link Rivet
         run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
+        shell: bash
+      # rivet/distribution (the update engine) and the tests' crypto
+      # factories need the crypto package; --auto pulls it for the rivet
+      # link, this keeps the direct dependency explicit.
+      - name: Install crypto (rivet/distribution dependency)
+        run: raco pkg install --auto --no-docs crypto
         shell: bash
       - name: Compile backend
         run: raco make app/core/*.rkt app/backend.rkt app/cli.rkt
@@ -59,6 +66,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: turinglambdaai/rivet
+          ref: v0.11.0
           path: rivet
       - name: Install Racket (CS, arm64)
         uses: Bogdanp/setup-racket@v1.15
@@ -86,6 +94,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: turinglambdaai/rivet
+          ref: v0.11.0
           path: rivet
       - name: Install Racket (CS)
         uses: Bogdanp/setup-racket@v1.15
@@ -130,6 +139,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: turinglambdaai/rivet
+          ref: v0.11.0
           path: rivet
       - name: Install Racket (CS)
         uses: Bogdanp/setup-racket@v1.15

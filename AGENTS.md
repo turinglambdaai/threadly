@@ -112,9 +112,9 @@ pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生�
 - **Linux CI 的 embed Racket**(setup-embed-racket 产出的 minimal)不带
   `raco make`(compiler-lib)和 `raco ctool`(cext-lib),`raco rivet
   build` 前要 `raco pkg install --auto --no-docs compiler-lib cext-lib`;
-  rivet 0.6.x 把 linux system 拆成多个 .cpp,CMakeLists 须逐个列出
-  (shutdown/notifications/tray/autostart/secure_storage/single_instance
-  /system_services_internal),只编 system_services.cpp 会链接失败。
+  Linux CMake 经 `add_subdirectory` + `rivet::platform` 消费 Rivet 平台
+  库(rivet#238),仓里不再手抄 Rivet 源清单;WebKitGTK 由宿主自己链
+  (`webkitgtk-6.0` PkgConfig::WEBKIT)。
 - **本机 git 突然报 Xcode license**(Xcode/CLT 后台升级后 `/usr/bin/git`
   被挡,exit 69):临时用
   `/Applications/Xcode.app/Contents/Developer/usr/bin/git`,根治需要用户

@@ -12,10 +12,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Exact rivet commit releases build against (family pin discipline).
-  # 53487b3 — native Linux deb/rpm/AppImage, portable zips beside every
-  # installer, split linux system sources.
-  RIVET_COMMIT: 53487b31a24b4bd0c747235ee204e540a9410cdf
+  # Rivet tag releases build against (family pin discipline; ci.yml
+  # checks out the same ref). v0.11.0 — the rivet/distribution update
+  # engine, RivetUpdate on macOS, package-target consumption on
+  # Linux/Windows.
+  RIVET_COMMIT: v0.11.0
 
 jobs:
   macos:
@@ -133,7 +134,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@53487b31a24b4bd0c747235ee204e540a9410cdf
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.11.0
       # The source-built minimal runtime ships without the packages that
       # provide `raco make` (compiler-lib) and `raco ctool` (cext-lib),
       # which `raco rivet build` drives; crypto is a rivet/distribution

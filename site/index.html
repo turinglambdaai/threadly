@@ -26,6 +26,7 @@
       <a href="#principles" data-i18n="nav.principles">设计原则</a>
       <a href="#start" data-i18n="nav.start">三步开始</a>
       <a href="#download" data-i18n="nav.download">下载</a>
+      <a href="guide.html" data-i18n="nav.guide">使用手册</a>
       <a href="https://github.com/turinglambdaai/threadly" data-i18n="nav.github">GitHub</a>
       <div class="lang-dropdown-wrapper">
         <button class="lang-btn" type="button" aria-label="Switch language">
@@ -44,7 +45,7 @@
 
 <main>
   <section class="hero">
-    <p class="kicker" data-i18n="kicker">原生客户端 · 只读 · 零凭据</p>
+    <p class="kicker" data-i18n="kicker">原生客户端 · 登录回帖 · AI 摘要与翻译</p>
     <h1 data-i18n="hero-title">在浏览器之外，读 Racket 社区。</h1>
     <p class="lede" data-i18n="hero-lede">
       Racket 的设计讨论、提案与生态动态都发生在 racket.discourse.group——
@@ -90,8 +91,8 @@
         <p data-i18n="p2-body">只打公开端点，响应全部落盘缓存并带 TTL，请求带身份标识的 User-Agent，收到 429 老实退避。</p>
       </div>
       <div class="card">
-        <h3 data-i18n="p3-title">今天只读</h3>
-        <p data-i18n="p3-body">匿名公开 JSON API，应用内外不存放任何凭据。登录写操作是后续里程碑，不是藏起来的功能。</p>
+        <h3 data-i18n="p3-title">凭据留在本机</h3>
+        <p data-i18n="p3-body">匿名即可读；登录走 Discourse user API key 流，凭据只存本机——回帖、点赞、通知不经过任何第三方。</p>
       </div>
       <div class="card">
         <h3 data-i18n="p4-title">长文优先</h3>
@@ -107,7 +108,7 @@
         <div class="step-num">1</div>
         <div>
           <h3 data-i18n="s1-title">下载安装</h3>
-          <p data-i18n="s1-body">macOS 拖进应用程序文件夹即可——没有账号、没有配置、没有遥测。</p>
+          <p data-i18n="s1-body">macOS 拖进应用程序文件夹即可——不注册也能读，没有遥测。</p>
         </div>
       </div>
       <div class="step">
@@ -132,22 +133,22 @@
     <div class="dl-grid">
       <a class="dl-card" href="https://github.com/turinglambdaai/threadly/releases/latest">
         <h3>macOS（Apple Silicon）</h3>
-        <p data-i18n="dl-mac-arm">DMG 安装器，适配 M 系列芯片。0.3.0 已发布。</p>
+        <p data-i18n="dl-mac-arm">DMG 安装器，适配 M 系列芯片。</p>
         <span class="btn btn-primary" data-i18n="dl-get">下载 →</span>
       </a>
       <a class="dl-card" href="https://github.com/turinglambdaai/threadly/releases/latest">
         <h3>macOS（Intel）</h3>
-        <p data-i18n="dl-mac-x64">DMG 安装器，适配 Intel 芯片。0.3.0 已发布。</p>
+        <p data-i18n="dl-mac-x64">DMG 安装器，适配 Intel 芯片。</p>
         <span class="btn btn-primary" data-i18n="dl-get">下载 →</span>
       </a>
       <a class="dl-card" href="https://github.com/turinglambdaai/threadly/releases/latest">
         <h3>Windows（x64）</h3>
-        <p data-i18n="dl-win">MSI 安装器与便携 zip。0.3.0 已发布。</p>
+        <p data-i18n="dl-win">MSI 安装器与便携 zip。</p>
         <span class="btn btn-primary" data-i18n="dl-get">下载 →</span>
       </a>
       <a class="dl-card" href="https://github.com/turinglambdaai/threadly/releases/latest">
         <h3>Linux（x64 / arm64）</h3>
-        <p data-i18n="dl-linux">deb、rpm、AppImage、tar.gz 与便携 zip。0.3.0 已发布。</p>
+        <p data-i18n="dl-linux">deb、rpm、AppImage、tar.gz 与便携 zip。</p>
         <span class="btn btn-primary" data-i18n="dl-get">下载 →</span>
       </a>
       <div class="dl-card">
@@ -168,10 +169,10 @@
   <section class="section">
     <h2 data-i18n="roadmap-title">路线图</h2>
     <ul>
-      <li><strong>M1</strong> — <span data-i18n="rm1">Windows / Linux 原生壳（已完成，随 0.2.0 发安装包）</span></li>
-      <li><strong>M2</strong> — <span data-i18n="rm2">登录态：Discourse user API key 流、回帖、点赞、通知</span></li>
-      <li><strong>M3</strong> — <span data-i18n="rm3">阅读增值：长帖摘要、翻译</span></li>
-      <li><strong>M4</strong> — <span data-i18n="rm4">移动端：iOS / iPadOS / Android</span></li>
+      <li><strong>M1</strong> — <span data-i18n="rm1">Windows / Linux 原生壳（已完成，随 0.2.0 发布）</span></li>
+      <li><strong>M2</strong> — <span data-i18n="rm2">登录态：Discourse user API key 流、回帖、点赞、通知（已完成，随 0.9.0 发布）</span></li>
+      <li><strong>M3</strong> — <span data-i18n="rm3">阅读增值：长帖 AI 摘要、翻译（已完成，随 0.10.0 发布）</span></li>
+      <li><strong>M4</strong> — <span data-i18n="rm4">移动端：iOS / iPadOS / Android（进行中）</span></li>
     </ul>
   </section>
 </main>
@@ -186,8 +187,8 @@
   var I18N = {
     en: {
       'nav.why': 'Why', 'nav.principles': 'Principles', 'nav.start': 'Get started',
-      'nav.download': 'Download', 'nav.github': 'GitHub',
-      'kicker': 'native client · read-only · zero credentials',
+      'nav.download': 'Download', 'nav.guide': 'User guide', 'nav.github': 'GitHub',
+      'kicker': 'native client · sign in to reply · AI summaries & translation',
       'hero-title': 'Read the Racket community, outside the browser.',
       'hero-lede': "Racket's design discussions, proposals and ecosystem news live on racket.discourse.group — and the browser wraps those long technical threads in layer after layer of chrome. Threadly brings them back to a native window over the anonymous public JSON API: forum-authentic category colors, post avatars, a 680px reading column.",
       'hero.download': 'Get Threadly', 'hero.source': 'View source',
@@ -203,36 +204,36 @@
       'p1-body': 'Threadly caches, it never forks: edits, deletions and topic moves always win, and every thread links back to the web.',
       'p2-title': 'A good citizen',
       'p2-body': 'Public endpoints only, every response cached on disk with a TTL, an identifying User-Agent on every request, and a 429 honored rather than retried into the ground.',
-      'p3-title': 'Read-only today',
-      'p3-body': 'The anonymous public JSON API — no credentials live in or near the app. Signed-in posting is a later milestone, not a hidden feature.',
+      'p3-title': 'Credentials stay local',
+      'p3-body': 'Reading is anonymous; sign-in uses the Discourse user API key flow and the key never leaves this machine — replies, likes and notifications without a middleman.',
       'p4-title': 'Long-form first',
       'p4-body': 'The reading experience is the product; the chrome is the thing being removed. A Racket engine behind first-party native UI — not a web app in a box.',
       'start-title': 'Get started in three steps',
       's1-title': 'Download and install',
-      's1-body': 'Drag Threadly to Applications on macOS — no account, no configuration, no telemetry.',
+      's1-body': 'Drag Threadly to Applications on macOS — read without an account, no telemetry.',
       's2-title': 'Browse the latest',
       's2-body': 'The sidebar lists fresh forum topics with category colors at a glance; every response is cached on disk, so re-opening never re-hits the forum.',
       's3-title': 'Search the archive, read threads',
       's3-body': 'Keyboard-first full-archive search; the thread view renders a whole discussion in reading order, with a one-click jump back to the web.',
       'download-title': 'Download',
-      'dl-mac-arm': 'DMG installer for Apple Silicon. 0.3.0 released.',
-      'dl-mac-x64': 'DMG installer for Intel Macs. 0.3.0 released.',
-      'dl-win': 'MSI installer and portable zip. 0.3.0 released.',
-      'dl-linux': 'deb, rpm, AppImage, tar.gz and portable zip for x64 and arm64. 0.3.0 released.',
+      'dl-mac-arm': 'DMG installer for Apple Silicon.',
+      'dl-mac-x64': 'DMG installer for Intel Macs.',
+      'dl-win': 'MSI installer and portable zip.',
+      'dl-linux': 'deb, rpm, AppImage, tar.gz and portable zip for x64 and arm64.',
       'dl-get': 'Download →',
       'dl-platforms-title': 'Platforms',
       'dl-platforms-body': 'Desktop installers are out for all three platforms; mobile is on the roadmap.',
       'roadmap-title': 'Roadmap',
-      'rm1': 'Windows / Linux native hosts (done; installers ship with 0.2.0)',
-      'rm2': 'Signed-in mode: Discourse user API key flow, replies, likes, notifications',
-      'rm3': 'Reading value-add: thread summaries, translation',
-      'rm4': 'Mobile: iOS / iPadOS / Android',
+      'rm1': 'Windows / Linux native hosts (done; shipped with 0.2.0)',
+      'rm2': 'Signed-in mode: Discourse user API key flow, replies, likes, notifications (done; shipped with 0.9.0)',
+      'rm3': 'Reading value-add: AI thread summaries, translation (done; shipped with 0.10.0)',
+      'rm4': 'Mobile: iOS / iPadOS / Android (in progress)',
       'footer-note': 'Threadly is an independent client, unaffiliated with the Racket community or Discourse. Data always comes from the public API.'
     },
     zh: {
       'nav.why': '为什么需要', 'nav.principles': '设计原则', 'nav.start': '三步开始',
-      'nav.download': '下载', 'nav.github': 'GitHub',
-      'kicker': '原生客户端 · 只读 · 零凭据',
+      'nav.download': '下载', 'nav.guide': '使用手册', 'nav.github': 'GitHub',
+      'kicker': '原生客户端 · 登录回帖 · AI 摘要与翻译',
       'hero-title': '在浏览器之外，读 Racket 社区。',
       'hero-lede': 'Racket 的设计讨论、提案与生态动态都发生在 racket.discourse.group——而浏览器给这些长技术帖套上了一层层外壳。Threadly 用匿名公开的 JSON API 把它们带回原生窗口：论坛原色分类、帖子头像、680px 的阅读栏宽。',
       'hero.download': '获取 Threadly', 'hero.source': '查看源码',
@@ -248,30 +249,30 @@
       'p1-body': 'Threadly 只缓存、不分叉：编辑、删除、挪版永远以论坛为准，每个帖子都能一键跳回原链。',
       'p2-title': '做好公民',
       'p2-body': '只打公开端点，响应全部落盘缓存并带 TTL，请求带身份标识的 User-Agent，收到 429 老实退避。',
-      'p3-title': '今天只读',
-      'p3-body': '匿名公开 JSON API，应用内外不存放任何凭据。登录写操作是后续里程碑，不是藏起来的功能。',
+      'p3-title': '凭据留在本机',
+      'p3-body': '匿名即可读；登录走 Discourse user API key 流，凭据只存本机——回帖、点赞、通知不经过任何第三方。',
       'p4-title': '长文优先',
       'p4-body': '阅读体验就是产品本身；要移除的恰恰是层层 chrome。Racket 引擎 + 第一方原生 UI，没有 WebView 套壳的网页应用。',
       'start-title': '三步开始',
       's1-title': '下载安装',
-      's1-body': 'macOS 拖进应用程序文件夹即可——没有账号、没有配置、没有遥测。',
+      's1-body': 'macOS 拖进应用程序文件夹即可——不注册也能读，没有遥测。',
       's2-title': '浏览最新',
       's2-body': '侧栏按分类原色列出论坛最新主题，回复、浏览与点赞一目了然；所有响应落盘缓存，重复打开不重复请求。',
       's3-title': '搜索归档，读长帖',
       's3-body': '键盘直达全站搜索；读帖视图按阅读顺序呈现整条讨论，随时一键跳回网页原帖。',
       'download-title': '下载',
-      'dl-mac-arm': 'DMG 安装器，适配 M 系列芯片。0.3.0 已发布。',
-      'dl-mac-x64': 'DMG 安装器，适配 Intel 芯片。0.3.0 已发布。',
-      'dl-win': 'MSI 安装器与便携 zip。0.3.0 已发布。',
-      'dl-linux': 'deb、rpm、AppImage、tar.gz 与便携 zip，x64 / arm64 双架构。0.3.0 已发布。',
+      'dl-mac-arm': 'DMG 安装器，适配 M 系列芯片。',
+      'dl-mac-x64': 'DMG 安装器，适配 Intel 芯片。',
+      'dl-win': 'MSI 安装器与便携 zip。',
+      'dl-linux': 'deb、rpm、AppImage、tar.gz 与便携 zip，x64 / arm64 双架构。',
       'dl-get': '下载 →',
       'dl-platforms-title': '平台',
-      'dl-platforms-body': 'Windows 与 Linux 原生壳已构建，安装包随下个版本一起发；移动端在路线图上。',
+      'dl-platforms-body': '桌面三平台全量安装包已发布；移动端在路线图上。',
       'roadmap-title': '路线图',
-      'rm1': 'Windows / Linux 原生壳（已完成，随 0.2.0 发安装包）',
-      'rm2': '登录态：Discourse user API key 流、回帖、点赞、通知',
-      'rm3': '阅读增值：长帖摘要、翻译',
-      'rm4': '移动端：iOS / iPadOS / Android',
+      'rm1': 'Windows / Linux 原生壳（已完成，随 0.2.0 发布）',
+      'rm2': '登录态：Discourse user API key 流、回帖、点赞、通知（已完成，随 0.9.0 发布）',
+      'rm3': '阅读增值：长帖 AI 摘要、翻译（已完成，随 0.10.0 发布）',
+      'rm4': '移动端：iOS / iPadOS / Android（进行中）',
       'footer-note': 'Threadly 是独立客户端，与 Racket 社区和 Discourse 无隶属关系。数据始终来自公开接口。'
     }
   };

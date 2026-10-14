@@ -5,7 +5,7 @@ Racket 社区论坛的原生客户端——不开浏览器标签页就能浏览�
 提案与生态动态都发生在这个论坛上,Threadly 给这些长技术帖一套配得上内容
 的阅读体验:今天在桌面,接下来是 iOS、iPadOS 和 Android。
 
-[![CI](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Racket](https://img.shields.io/badge/Racket-9.3-9D00FF?logo=racket&logoColor=white)
+[![CI](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/threadly)](https://github.com/turinglambdaai/threadly/releases/latest) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)](https://github.com/turinglambdaai/threadly/releases/latest) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Racket](https://img.shields.io/badge/Racket-9.3-9D00FF?logo=racket&logoColor=white)
 
 [English](README.md) · **中文**
 

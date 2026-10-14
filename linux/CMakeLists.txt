@@ -17,81 +17,34 @@ if(NOT DEFINED ENV{RIVET_ROOT})
 endif()
 set(RIVET_ROOT "$ENV{RIVET_ROOT}")
 
-# RIVET_RACKET_LIBRARY is the exact embeddable Racket CS library. The lib-dir
-# fallback supports installations that expose an unversioned linker name.
-if(NOT DEFINED ENV{RIVET_RACKET_INCLUDE})
-  message(FATAL_ERROR "RIVET_RACKET_INCLUDE is not set. Point it at the Racket include directory.")
-endif()
+# The Rivet platform (backend, system services, theme, update handoff,
+# protocol) is consumed as a package library target (project constraint,
+# rivet#238): hosts never compile Rivet sources into their own executable
+# lists — rivet adding a translation unit needs no downstream change. The
+# target publicly carries GTK4/GLIO/libsecret/curses/LZ4/zlib and the
+# Racket include dir.
+add_subdirectory("${RIVET_ROOT}/platform/linux"
+                 "${CMAKE_BINARY_DIR}/rivet-platform-build")
 
-find_package(PkgConfig REQUIRED)
-find_package(Curses REQUIRED)
-find_package(Threads REQUIRED)
-find_package(ZLIB REQUIRED)
-find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
-pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
-pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET gio-2.0)
 # The reader pane renders the forum's cooked HTML in WebKitGTK — the GTK4
-# build is the webkitgtk-6.0 pkg-config module (libsoup3).
+# build is the webkitgtk-6.0 pkg-config module (libsoup3). rivet::platform
+# does not carry WebKit.
+find_package(PkgConfig REQUIRED)
 pkg_check_modules(WEBKIT REQUIRED IMPORTED_TARGET webkitgtk-6.0)
 message(STATUS "WebKitGTK include dirs: ${WEBKIT_INCLUDE_DIRS}")
-# The Secret Service adapter is compiled whenever libsecret is present; the
-# capability then reports itself at runtime based on service availability.
-pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
-if(DEFINED ENV{RIVET_RACKET_LIBRARY})
-  set(RACKETCS_LIBRARY "$ENV{RIVET_RACKET_LIBRARY}")
-elseif(DEFINED ENV{RIVET_RACKET_LIB_DIR})
-  find_library(RACKETCS_LIBRARY
-    NAMES racketcs
-    PATHS "$ENV{RIVET_RACKET_LIB_DIR}"
-    NO_DEFAULT_PATH
-    REQUIRED
-  )
-else()
-  message(FATAL_ERROR "Set RIVET_RACKET_LIBRARY to libracketcs, or RIVET_RACKET_LIB_DIR to its directory.")
-endif()
-
-# Rivet 0.6.x keeps splitting platform/linux/system into more translation
-# units; newer pins add files older pins fold into system_services.cpp
-# (global_shortcuts, clipboard, file dialogs...). Link the whole directory
-# so both release pins and main-branch rivet build.
-file(GLOB RIVET_SYSTEM_SOURCES "${RIVET_ROOT}/platform/linux/system/*.cpp")
 
 add_executable(RivetHost
   src/main.cpp
-  "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
-  ${RIVET_SYSTEM_SOURCES}
-  "${RIVET_ROOT}/platform/linux/theme/theme.cpp"
-  "${RIVET_ROOT}/runtime/src/protocol.cpp"
 )
-
-if(LIBSECRET_FOUND)
-  target_compile_definitions(RivetHost PRIVATE RIVET_HAVE_LIBSECRET=1)
-endif()
 
 target_include_directories(RivetHost PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}"
   ${WEBKIT_INCLUDE_DIRS}
-  "${RIVET_ROOT}/platform/linux/runtime"
-  "${RIVET_ROOT}/platform/linux/system"
-  "${RIVET_ROOT}/platform/linux/theme"
-  "${RIVET_ROOT}/runtime/include"
-  "$ENV{RIVET_RACKET_INCLUDE}"
 )
 
 target_link_libraries(RivetHost PRIVATE
-  PkgConfig::GTK4
-  PkgConfig::GLIB
+  rivet::platform
   PkgConfig::WEBKIT
-  ${RACKETCS_LIBRARY}
-  ZLIB::ZLIB
-  ${LZ4_LIBRARY}
-  ${CURSES_LIBRARIES}
-  Threads::Threads
-  ${CMAKE_DL_LIBS}
 )
-
-if(LIBSECRET_FOUND)
-  target_link_libraries(RivetHost PRIVATE PkgConfig::LIBSECRET)
-endif()
 
 target_compile_options(RivetHost PRIVATE -Wall -Wextra -Wpedantic)

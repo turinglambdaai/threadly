@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threadly — 使用手册</title>
+<meta name="description" content="Threadly 使用手册:五分钟上手、登录、话题阅读、通知、AI 摘要与翻译(ai-config 0600 配置)、点赞与常见问题。">
+<link rel="stylesheet" href="styles.css">
+<script>
+  (function () {
+    var t = localStorage.getItem('threadly-theme');
+    if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+    var l = localStorage.getItem('threadly-lang');
+    if (!l) l = (navigator.language || 'zh').toLowerCase().startsWith('zh') ? 'zh' : 'en';
+    document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en';
+  })();
+</script>
+<style>
+  /* Manual layout — same palette tokens as styles.css. */
+  .manual { display: grid; grid-template-columns: 220px minmax(0,1fr); gap: 40px; padding: 44px 0 24px; }
+  @media (max-width: 860px) { .manual { grid-template-columns: 1fr; } .manual-toc { position: static; } }
+  .manual-toc { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+  .manual-toc a { display: block; padding: 5px 0; color: var(--muted); text-decoration: none; }
+  .manual-toc a:hover { color: var(--accent); }
+  .manual-toc .toc-group { margin: 16px 0 4px; font-weight: 700; color: var(--ink); }
+  .manual h2 { font-size: 22px; margin: 0 0 14px; }
+  .manual section { margin: 0 0 44px; }
+  .manual p, .manual li { color: var(--muted); font-size: 15px; line-height: 1.75; }
+  .manual h3 { font-size: 16px; margin: 22px 0 8px; color: var(--ink); }
+  .manual ol, .manual ul { padding-left: 22px; margin: 10px 0; }
+  .manual li { margin: 6px 0; }
+  .manual strong { color: var(--ink); }
+  .manual code { background: var(--chip-bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 13px; }
+  .manual pre { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; }
+  .manual pre code { border: 0; background: none; padding: 0; }
+  .callout { border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent-soft); padding: 12px 16px; margin: 14px 0; }
+  .callout p { margin: 0; color: var(--ink); }
+  table.faq-table, table.how-table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  .manual th, .manual td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  .manual th { color: var(--ink); background: var(--surface); }
+  .manual td { color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">Threadly</a>
+    <nav class="nav-links">
+      <a href="index.html#why" data-i18n="nav.why">为什么需要</a>
+      <a href="#" data-i18n="nav.guide">使用手册</a>
+      <a href="index.html#download" data-i18n="nav.download">下载</a>
+      <a href="https://github.com/turinglambdaai/threadly" data-i18n="nav.github">GitHub</a>
+      <div class="lang-dropdown-wrapper">
+        <button class="lang-btn" type="button" aria-label="Switch language">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          <span id="current-lang-label">English</span>
+        </button>
+        <ul class="lang-menu">
+          <li onclick="setLanguage('en')">English</li>
+          <li onclick="setLanguage('zh')">简体中文</li>
+        </ul>
+      </div>
+      <button class="theme-btn" id="theme-btn" aria-label="Toggle theme">◐</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" style="padding-bottom:8px">
+    <p class="kicker" data-i18n="kicker">使用手册</p>
+    <h1 data-i18n="hero-title">五分钟读懂 Threadly。</h1>
+    <p class="lede" data-i18n="hero-lede">
+      安装、登录、读第一个话题；再看核心功能与常见问题。句子短，照着做即可。
+    </p>
+  </section>
+
+  <div class="manual">
+    <aside class="manual-toc">
+      <div class="toc-group" data-i18n="toc.start">上手</div>
+      <a href="#quickstart" data-i18n="toc.quickstart">五分钟上手</a>
+      <div class="toc-group" data-i18n="toc.core">核心功能</div>
+      <a href="#topics" data-i18n="toc.topics">话题与阅读</a>
+      <a href="#signin" data-i18n="toc.signin">登录与账号</a>
+      <a href="#notifications" data-i18n="toc.notifications">通知</a>
+      <a href="#likes" data-i18n="toc.likes">点赞</a>
+      <a href="#ai" data-i18n="toc.ai">AI 摘要与翻译</a>
+      <a href="#updates" data-i18n="toc.updates">更新</a>
+      <div class="toc-group" data-i18n="toc.faq">常见问题</div>
+      <a href="#faq" data-i18n="toc.faq">FAQ</a>
+    </aside>
+
+    <div class="manual-body">
+
+      <!-- =================== 五分钟上手 =================== -->
+      <section id="quickstart">
+        <h2 data-i18n="qs-title">五分钟上手</h2>
+        <p data-i18n="qs-lede">安装、登录、点开第一个话题。教程到这里就结束了。</p>
+        <ol>
+          <li data-i18n="qs-1"><strong>安装。</strong>打开 <a href="https://github.com/turinglambdaai/threadly/releases/latest">Releases</a> 页。macOS 把 DMG 里的应用拖进「应用程序」；Windows 双击 MSI；Linux 用 deb / rpm / AppImage。</li>
+          <li data-i18n="qs-2"><strong>打开。</strong>启动即读：侧栏列出论坛最新话题，不需要账号。</li>
+          <li data-i18n="qs-3"><strong>登录（可选）。</strong>点「登录」。浏览器打开论坛授权页，点批准；把论坛显示的那串代码粘贴回应用。完成。</li>
+          <li data-i18n="qs-4"><strong>读第一个话题。</strong>点侧栏任意一行。整条讨论按阅读顺序排好，长帖也能一口气读完。</li>
+        </ol>
+        <div class="callout"><p data-i18n="qs-hint">提示：登录只影响写操作——回帖、点赞、通知。只读不登录，一切照旧。</p></div>
+      </section>
+
+      <!-- =================== 核心功能 =================== -->
+      <section id="topics">
+        <h2 data-i18n="topics-title">话题与阅读</h2>
+        <ul>
+          <li data-i18n="topics-1"><strong>浏览最新。</strong>侧栏按分类列出最新话题；回复、浏览、点赞数一目了然。</li>
+          <li data-i18n="topics-2"><strong>搜索归档。</strong>点搜索框，回车即搜。键盘直达。</li>
+          <li data-i18n="topics-3"><strong>读长帖。</strong>读帖视图按阅读顺序呈现整条讨论；作者头像、原帖链接随手可点。</li>
+          <li data-i18n="topics-4"><strong>离线重读。</strong>每次响应都落盘缓存。重开页面不重新请求。</li>
+        </ul>
+      </section>
+
+      <section id="signin">
+        <h2 data-i18n="signin-title">登录与账号</h2>
+        <p data-i18n="signin-1">登录用 Discourse 官方的 user API key 流程，Threadly 不碰你的论坛密码。</p>
+        <ol>
+          <li data-i18n="signin-2"><strong>点「登录」。</strong>应用打开论坛授权页。</li>
+          <li data-i18n="signin-3"><strong>批准授权。</strong>申请的权限是 read | write | notifications——读、写、通知，仅此三项。</li>
+          <li data-i18n="signin-4"><strong>粘贴代码。</strong>论坛批准后显示一段加密文本；复制，粘进应用，确认。</li>
+        </ol>
+        <div class="callout"><p data-i18n="signin-hint">密钥只存本机（0600 权限）。换机器要重新登录；登出即删。</p></div>
+      </section>
+
+      <section id="notifications">
+        <h2 data-i18n="notif-title">通知</h2>
+        <p data-i18n="notif-1">登录后，侧栏有「通知」。点开，看论坛的回复、提及与点赞。</p>
+        <ul>
+          <li data-i18n="notif-2">通知来自论坛本体，Threadly 只读不存。</li>
+          <li data-i18n="notif-3">点一条通知，直接跳到对应话题。</li>
+        </ul>
+      </section>
+
+      <section id="likes">
+        <h2 data-i18n="likes-title">点赞</h2>
+        <ul>
+          <li data-i18n="likes-1"><strong>看点赞。</strong>每楼右侧显示论坛的点赞数——打开就有，不是空白。</li>
+          <li data-i18n="likes-2"><strong>点赞。</strong>点红心即可。你点过的楼显示实心，论坛状态实时同步。</li>
+        </ul>
+      </section>
+
+      <section id="ai">
+        <h2 data-i18n="ai-title">AI 摘要与翻译</h2>
+        <p data-i18n="ai-1">摘要和翻译走你自己的 OpenAI 兼容端点。配一次，三平台都能用。默认未配置——不配置就没有 AI 功能，其余一切照常。</p>
+        <h3 data-i18n="ai-cfg-title">配置（一次）</h3>
+        <p data-i18n="ai-cfg-1">终端里执行：</p>
+        <pre><code>threadly ai-config --base-url https://api.example.com/v1 \
+  --api-key sk-... --model gpt-4o-mini --target-lang zh</code></pre>
+        <ul>
+          <li data-i18n="ai-cfg-2"><code>--base-url</code>：聊天补全端点根地址（OpenAI 兼容即可）。</li>
+          <li data-i18n="ai-cfg-3"><code>--api-key</code>：该端点的密钥。只存本机 <code>ai-config.json</code>，权限 0600，只发往该端点。</li>
+          <li data-i18n="ai-cfg-4"><code>--model</code>：模型名，如 <code>gpt-4o-mini</code>。</li>
+          <li data-i18n="ai-cfg-5"><code>--target-lang</code>：翻译目标语言，如 <code>zh</code>、<code>en</code>。</li>
+        </ul>
+        <p data-i18n="ai-cfg-6">不带参数执行 <code>threadly ai-config</code> 可查看当前配置。</p>
+        <h3 data-i18n="ai-use-title">使用</h3>
+        <ul>
+          <li data-i18n="ai-use-1"><strong>摘要。</strong>打开话题，点「摘要」。长帖几十秒出要点。</li>
+          <li data-i18n="ai-use-2"><strong>翻译。</strong>点「翻译」。整条讨论译成目标语言。</li>
+          <li data-i18n="ai-use-3"><strong>命令行。</strong><code>threadly summary &lt;id&gt;</code>、<code>threadly translate &lt;id&gt;</code> 同样可用。</li>
+        </ul>
+      </section>
+
+      <section id="updates">
+        <h2 data-i18n="upd-title">更新</h2>
+        <ul>
+          <li data-i18n="upd-1"><strong>自动检查。</strong>应用每 4 小时静默查一次新版；有新版才提醒。</li>
+          <li data-i18n="upd-2"><strong>手动检查。</strong>macOS 在菜单 Threadly → Check for Updates；Windows/Linux 在应用内更新入口。命令行也可：<code>threadly update-check</code>。</li>
+          <li data-i18n="upd-3"><strong>安装。</strong>确认后应用自己下载、验签、换新并重启。更新包带 Ed25519 签名，验证不过不安装。</li>
+        </ul>
+      </section>
+
+      <!-- =================== FAQ =================== -->
+      <section id="faq">
+        <h2 data-i18n="faq-title">常见问题</h2>
+
+        <h3 data-i18n="faq1-q">登录页让我批准哪些权限？</h3>
+        <p data-i18n="faq1-a">read | write | notifications。读话题、回帖点赞、收通知。没有更多。密钥随时可在论坛个人设置里吊销。</p>
+
+        <h3 data-i18n="faq2-q">我的数据存在哪里？</h3>
+        <table class="faq-table">
+          <thead>
+            <tr><th data-i18n="faq2-os">平台</th><th data-i18n="faq2-path">数据目录</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>macOS</td><td><code>~/Library/Caches/threadly</code></td></tr>
+            <tr><td>Linux</td><td><code>~/.cache/threadly</code>（或 <code>$XDG_CACHE_HOME/threadly</code>）</td></tr>
+            <tr><td>Windows</td><td><code>%LOCALAPPDATA%\threadly</code></td></tr>
+          </tbody>
+        </table>
+        <p data-i18n="faq2-more">里面有：话题缓存、登录密钥（0600）、AI 配置（0600）、更新下载。删目录即重置。</p>
+
+        <h3 data-i18n="faq3-q">必须注册账号吗？</h3>
+        <p data-i18n="faq3-a">不。匿名可读、可搜。登录只为回帖、点赞、通知。</p>
+
+        <h3 data-i18n="faq4-q">支持哪些平台？</h3>
+        <p data-i18n="faq4-a">macOS 14+（Apple Silicon 与 Intel）、Windows 10+（x64）、Linux（x64 / arm64，GTK4）。移动端在路线图上。</p>
+
+        <h3 data-i18n="faq5-q">怎么更新？</h3>
+        <p data-i18n="faq5-a">见上文「更新」。简版：应用内确认，一键完成；或到 Releases 页手动下载。</p>
+
+        <h3 data-i18n="faq6-q">怎么卸载？</h3>
+        <p data-i18n="faq6-a">macOS 把应用拖进废纸篓；Windows 在「设置 → 应用」卸载，或另存便携 zip 直接删除；Linux 卸载对应的包。再删掉上文的数据目录，痕迹清零。</p>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>AGPL-3.0 · <a href="https://github.com/turinglambdaai/threadly">github.com/turinglambdaai/threadly</a></span>
+  <span data-i18n="footer-note">Threadly 是独立客户端，与 Racket 社区和 Discourse 无隶属关系。数据始终来自公开接口。</span>
+</footer>
+
+<script>
+(function () {
+  var I18N = {
+    en: {
+      'nav.why': 'Why', 'nav.guide': 'User guide', 'nav.download': 'Download', 'nav.github': 'GitHub',
+      'kicker': 'User manual',
+      'hero-title': 'Threadly in five minutes.',
+      'hero-lede': 'Install, sign in, read your first topic — then features and FAQ. Short sentences; just follow along.',
+      'toc.start': 'Get started', 'toc.quickstart': 'Five-minute start',
+      'toc.core': 'Features', 'toc.topics': 'Topics and reading', 'toc.signin': 'Sign-in and account',
+      'toc.notifications': 'Notifications', 'toc.likes': 'Likes', 'toc.ai': 'AI summaries & translation',
+      'toc.updates': 'Updates', 'toc.faq': 'FAQ',
+      'qs-title': 'Five-minute start',
+      'qs-lede': 'Install, sign in, open your first topic. That is the whole tutorial.',
+      'qs-1': "<strong>Install.</strong> Open the <a href='https://github.com/turinglambdaai/threadly/releases/latest'>Releases</a> page. On macOS drag the app from the DMG into Applications; on Windows run the MSI; on Linux use the deb / rpm / AppImage.",
+      'qs-2': '<strong>Open it.</strong> Reading works right away: the sidebar lists the latest topics. No account needed.',
+      'qs-3': '<strong>Sign in (optional).</strong> Click Sign in. Your browser opens the forum approval page; approve it, then paste the code the forum shows back into the app.',
+      'qs-4': '<strong>Read your first topic.</strong> Click any row in the sidebar. The whole discussion appears in reading order.',
+      'qs-hint': 'Signing in only affects writing — replies, likes, notifications. Anonymous reading works exactly as before.',
+      'topics-title': 'Topics and reading',
+      'topics-1': '<strong>Browse.</strong> The sidebar lists fresh topics with category colors; replies, views and likes at a glance.',
+      'topics-2': '<strong>Search.</strong> Click the search field and press Enter. Keyboard-first.',
+      'topics-3': '<strong>Read.</strong> The thread view renders the whole discussion in reading order, avatars and the original thread one click away.',
+      'topics-4': '<strong>Re-read offline.</strong> Every response is cached on disk; re-opening never re-hits the forum.',
+      'signin-title': 'Sign-in and account',
+      'signin-1': "Sign-in uses Discourse's official user API key flow — Threadly never sees your forum password.",
+      'signin-2': '<strong>Click Sign in.</strong> The app opens the forum approval page.',
+      'signin-3': '<strong>Approve.</strong> The requested scopes are read | write | notifications — nothing else.',
+      'signin-4': '<strong>Paste the code.</strong> The forum shows an encrypted blob after approval; copy it into the app and confirm.',
+      'signin-hint': 'The key stays on this machine (0600). New machine, new sign-in; signing out deletes it.',
+      'notif-title': 'Notifications',
+      'notif-1': 'After signing in, the sidebar has Notifications. Open it for replies, mentions and likes.',
+      'notif-2': 'Notifications come from the forum itself; Threadly only reads them.',
+      'notif-3': 'Click one to jump straight to the topic.',
+      'likes-title': 'Likes',
+      'likes-1': '<strong>See likes.</strong> Every post shows the forum like count from the start — never blank.',
+      'likes-2': '<strong>Like.</strong> Click the heart. Posts you liked render filled, in sync with the forum.',
+      'ai-title': 'AI summaries & translation',
+      'ai-1': 'Summaries and translation use your own OpenAI-compatible endpoint. Configure once; every platform picks it up. Nothing AI happens until you do.',
+      'ai-cfg-title': 'Configure (once)',
+      'ai-cfg-1': 'Run this in a terminal:',
+      'ai-cfg-2': "<code>--base-url</code>: root of a chat-completions endpoint (OpenAI-compatible).",
+      'ai-cfg-3': '<code>--api-key</code>: the key for that endpoint. Stored locally in <code>ai-config.json</code> with 0600 permissions and sent only there.',
+      'ai-cfg-4': '<code>--model</code>: model name, e.g. <code>gpt-4o-mini</code>.',
+      'ai-cfg-5': '<code>--target-lang</code>: translation target, e.g. <code>zh</code> or <code>en</code>.',
+      'ai-cfg-6': 'Run <code>threadly ai-config</code> with no flags to show the current configuration.',
+      'ai-use-title': 'Use',
+      'ai-use-1': '<strong>Summarize.</strong> Open a topic and click Summarize. Key points in seconds.',
+      'ai-use-2': '<strong>Translate.</strong> Click Translate. The whole discussion, in your language.',
+      'ai-use-3': '<strong>CLI.</strong> <code>threadly summary &lt;id&gt;</code> and <code>threadly translate &lt;id&gt;</code> work too.',
+      'upd-title': 'Updates',
+      'upd-1': '<strong>Automatic.</strong> The app checks silently every 4 hours and only speaks up when a new version exists.',
+      'upd-2': '<strong>Manual.</strong> macOS: Threadly → Check for Updates. Windows/Linux: the in-app update entry. CLI: <code>threadly update-check</code>.',
+      'upd-3': '<strong>Install.</strong> Confirm once — the app downloads, verifies the Ed25519 signature, swaps itself and relaunches. A failed signature never installs.',
+      'faq-title': 'FAQ',
+      'faq1-q': 'What scopes does the sign-in page ask for?',
+      'faq1-a': 'read | write | notifications. Read topics, post and like, receive notifications. Nothing more. Revoke the key anytime in your forum profile settings.',
+      'faq2-q': 'Where does my data live?',
+      'faq2-os': 'Platform', 'faq2-path': 'Data directory',
+      'faq2-more': 'Inside: the topic cache, the sign-in key (0600), the AI config (0600), and downloaded updates. Delete the folder to reset.',
+      'faq3-q': 'Do I need an account?',
+      'faq3-a': 'No. Read and search anonymously. Signing in is only for replies, likes and notifications.',
+      'faq4-q': 'Which platforms are supported?',
+      'faq4-a': 'macOS 14+ (Apple Silicon and Intel), Windows 10+ (x64), Linux (x64 / arm64, GTK4). Mobile is on the roadmap.',
+      'faq5-q': 'How do I update?',
+      'faq5-a': 'See Updates above. Short version: confirm once in the app, done — or download from the Releases page.',
+      'faq6-q': 'How do I uninstall?',
+      'faq6-a': 'macOS: drag the app to the Trash. Windows: uninstall under Settings → Apps, or delete the portable zip. Linux: remove the package. Then delete the data directory above and every trace is gone.',
+      'footer-note': 'Threadly is an independent client, unaffiliated with the Racket community or Discourse. Data always comes from the public API.'
+    },
+    zh: {
+      'nav.why': '为什么需要', 'nav.guide': '使用手册', 'nav.download': '下载', 'nav.github': 'GitHub',
+      'kicker': '使用手册',
+      'hero-title': '五分钟读懂 Threadly。',
+      'hero-lede': '安装、登录、读第一个话题；再看核心功能与常见问题。句子短，照着做即可。',
+      'toc.start': '上手', 'toc.quickstart': '五分钟上手',
+      'toc.core': '核心功能', 'toc.topics': '话题与阅读', 'toc.signin': '登录与账号',
+      'toc.notifications': '通知', 'toc.likes': '点赞', 'toc.ai': 'AI 摘要与翻译',
+      'toc.updates': '更新', 'toc.faq': '常见问题',
+      'qs-title': '五分钟上手',
+      'qs-lede': '安装、登录、点开第一个话题。教程到这里就结束了。',
+      'qs-1': '<strong>安装。</strong>打开 <a href="https://github.com/turinglambdaai/threadly/releases/latest">Releases</a> 页。macOS 把 DMG 里的应用拖进「应用程序」；Windows 双击 MSI；Linux 用 deb / rpm / AppImage。',
+      'qs-2': '<strong>打开。</strong>启动即读：侧栏列出论坛最新话题，不需要账号。',
+      'qs-3': '<strong>登录（可选）。</strong>点「登录」。浏览器打开论坛授权页，点批准；把论坛显示的那串代码粘贴回应用。完成。',
+      'qs-4': '<strong>读第一个话题。</strong>点侧栏任意一行。整条讨论按阅读顺序排好，长帖也能一口气读完。',
+      'qs-hint': '提示：登录只影响写操作——回帖、点赞、通知。只读不登录，一切照旧。',
+      'topics-title': '话题与阅读',
+      'topics-1': '<strong>浏览最新。</strong>侧栏按分类列出最新话题；回复、浏览、点赞数一目了然。',
+      'topics-2': '<strong>搜索归档。</strong>点搜索框，回车即搜。键盘直达。',
+      'topics-3': '<strong>读长帖。</strong>读帖视图按阅读顺序呈现整条讨论；作者头像、原帖链接随手可点。',
+      'topics-4': '<strong>离线重读。</strong>每次响应都落盘缓存。重开页面不重新请求。',
+      'signin-title': '登录与账号',
+      'signin-1': '登录用 Discourse 官方的 user API key 流程，Threadly 不碰你的论坛密码。',
+      'signin-2': '<strong>点「登录」。</strong>应用打开论坛授权页。',
+      'signin-3': '<strong>批准授权。</strong>申请的权限是 read | write | notifications——读、写、通知，仅此三项。',
+      'signin-4': '<strong>粘贴代码。</strong>论坛批准后显示一段加密文本；复制，粘进应用，确认。',
+      'signin-hint': '密钥只存本机（0600 权限）。换机器要重新登录；登出即删。',
+      'notif-title': '通知',
+      'notif-1': '登录后，侧栏有「通知」。点开，看论坛的回复、提及与点赞。',
+      'notif-2': '通知来自论坛本体，Threadly 只读不存。',
+      'notif-3': '点一条通知，直接跳到对应话题。',
+      'likes-title': '点赞',
+      'likes-1': '<strong>看点赞。</strong>每楼右侧显示论坛的点赞数——打开就有，不是空白。',
+      'likes-2': '<strong>点赞。</strong>点红心即可。你点过的楼显示实心，论坛状态实时同步。',
+      'ai-title': 'AI 摘要与翻译',
+      'ai-1': '摘要和翻译走你自己的 OpenAI 兼容端点。配一次，三平台都能用。默认未配置——不配置就没有 AI 功能，其余一切照常。',
+      'ai-cfg-title': '配置（一次）',
+      'ai-cfg-1': '终端里执行：',
+      'ai-cfg-2': '<code>--base-url</code>：聊天补全端点根地址（OpenAI 兼容即可）。',
+      'ai-cfg-3': '<code>--api-key</code>：该端点的密钥。只存本机 <code>ai-config.json</code>，权限 0600，只发往该端点。',
+      'ai-cfg-4': '<code>--model</code>：模型名，如 <code>gpt-4o-mini</code>。',
+      'ai-cfg-5': '<code>--target-lang</code>：翻译目标语言，如 <code>zh</code>、<code>en</code>。',
+      'ai-cfg-6': '不带参数执行 <code>threadly ai-config</code> 可查看当前配置。',
+      'ai-use-title': '使用',
+      'ai-use-1': '<strong>摘要。</strong>打开话题，点「摘要」。长帖几十秒出要点。',
+      'ai-use-2': '<strong>翻译。</strong>点「翻译」。整条讨论译成目标语言。',
+      'ai-use-3': '<strong>命令行。</strong><code>threadly summary &lt;id&gt;</code>、<code>threadly translate &lt;id&gt;</code> 同样可用。',
+      'upd-title': '更新',
+      'upd-1': '<strong>自动检查。</strong>应用每 4 小时静默查一次新版；有新版才提醒。',
+      'upd-2': '<strong>手动检查。</strong>macOS 在菜单 Threadly → Check for Updates；Windows/Linux 在应用内更新入口。命令行也可：<code>threadly update-check</code>。',
+      'upd-3': '<strong>安装。</strong>确认后应用自己下载、验签、换新并重启。更新包带 Ed25519 签名，验证不过不安装。',
+      'faq-title': '常见问题',
+      'faq1-q': '登录页让我批准哪些权限？',
+      'faq1-a': 'read | write | notifications。读话题、回帖点赞、收通知。没有更多。密钥随时可在论坛个人设置里吊销。',
+      'faq2-q': '我的数据存在哪里？',
+      'faq2-os': '平台', 'faq2-path': '数据目录',
+      'faq2-more': '里面有：话题缓存、登录密钥（0600）、AI 配置（0600）、更新下载。删目录即重置。',
+      'faq3-q': '必须注册账号吗？',
+      'faq3-a': '不。匿名可读、可搜。登录只为回帖、点赞、通知。',
+      'faq4-q': '支持哪些平台？',
+      'faq4-a': 'macOS 14+（Apple Silicon 与 Intel）、Windows 10+（x64）、Linux（x64 / arm64，GTK4）。移动端在路线图上。',
+      'faq5-q': '怎么更新？',
+      'faq5-a': '见上文「更新」。简版：应用内确认，一键完成；或到 Releases 页手动下载。',
+      'faq6-q': '怎么卸载？',
+      'faq6-a': 'macOS 把应用拖进废纸篓；Windows 在「设置 → 应用」卸载，或另存便携 zip 直接删除；Linux 卸载对应的包。再删掉上文的数据目录，痕迹清零。',
+      'footer-note': 'Threadly 是独立客户端，与 Racket 社区和 Discourse 无隶属关系。数据始终来自公开接口。'
+    }
+  };
+
+  function setLang(lang) {
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    var dict = I18N[lang];
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n');
+      if (dict[key]) el.innerHTML = dict[key];
+    });
+    document.getElementById('current-lang-label').textContent = lang === 'zh' ? '简体中文' : 'English';
+    localStorage.setItem('threadly-lang', lang);
+  }
+
+  window.setLanguage = setLang;
+
+  document.querySelector('.lang-btn').addEventListener('click', function () {
+    var menu = document.querySelector('.lang-menu');
+    menu.classList.toggle('open');
+  });
+
+  document.getElementById('theme-btn').addEventListener('click', function () {
+    var next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('threadly-theme', next);
+  });
+
+  setLang(document.documentElement.lang === 'zh-CN' ? 'zh' : 'en');
+})();
+</script>
+</body>
+</html>
