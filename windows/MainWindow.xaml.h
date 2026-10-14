@@ -33,6 +33,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                   Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void Refresh_Click(winrt::Windows::Foundation::IInspectable const& sender,
                      Microsoft::UI::Xaml::RoutedEventArgs const& args);
+  void OnAbout(winrt::Windows::Foundation::IInspectable const& sender,
+               Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void StatusBar_Close(winrt::Windows::Foundation::IInspectable const& sender,
                        winrt::Windows::Foundation::IInspectable const& args);
   void CheckForUpdates_Click(winrt::Windows::Foundation::IInspectable const& sender,
@@ -103,10 +105,14 @@ struct MainWindow : MainWindowT<MainWindow> {
   void HandleInstallMarkers();
   bool IsDevCopy();
   bool IsMsiInstall();
+  // copy_button: when non-empty, a secondary button copies the dialog body
+  // (the failure message) to the clipboard — update errors must leave the
+  // screen with the user (family rule: error text is always copyable).
   void ShowUpdateDialog(std::wstring const& title, std::wstring const& body,
                         std::wstring const& primary_button,
                         std::wstring const& close_button,
-                        std::function<void()> on_primary);
+                        std::function<void()> on_primary,
+                        std::wstring const& copy_button = L"");
 
   std::shared_ptr<rivet::windows::Backend> backend_;
   std::vector<TopicRow> topics_;

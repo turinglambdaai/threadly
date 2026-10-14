@@ -24,16 +24,17 @@
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0" ColumnSpacing="6">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
                     <Button Grid.Column="0" x:Name="BackButton" Content="&#xE72B;" FontFamily="Segoe MDL2 Assets" Background="Transparent" Visibility="Collapsed" ToolTipService.ToolTip="Back to latest" Click="Back_Click" />
                     <TextBlock Grid.Column="1" x:Name="SidebarTitle" Text="Latest" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <Button Grid.Column="2" x:Name="SummarizeButton" Content="Summarize" Background="Transparent" Padding="6,4" IsEnabled="False" ToolTipService.ToolTip="AI summary of this thread (threadly ai-config)" Click="Summarize_Click" />
@@ -42,6 +43,7 @@
                     <Button Grid.Column="5" x:Name="AccountButton" Content="&#xE77B;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="Sign in" Click="Account_Click" />
                     <Button Grid.Column="6" Content="&#xE895;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="Check for updates" Click="CheckForUpdates_Click" />
                     <Button Grid.Column="7" Content="&#xE72C;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="Refresh" Click="Refresh_Click" />
+                    <Button Grid.Column="8" Content="&#xE897;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="About Threadly" Click="OnAbout" />
                 </Grid>
 
                 <ComboBox Grid.Row="1" x:Name="CategoryPicker" HorizontalAlignment="Stretch" SelectionChanged="CategoryPicker_SelectionChanged" IsEnabled="False" PlaceholderText="Latest" />

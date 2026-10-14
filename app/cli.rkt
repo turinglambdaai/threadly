@@ -28,7 +28,7 @@
   (let loop ([as args] [pos '()] [page 0] [json? #f] [no-cache? #f])
     (match as
       ['() (values (and (pair? pos) (first (reverse pos)))
-                   (rest (reverse pos))
+                   (if (pair? pos) (rest (reverse pos)) '())
                    page json? no-cache?)]
       [(cons "--json" rest) (loop rest pos page #t no-cache?)]
       [(cons "--no-cache" rest) (loop rest pos page json? #t)]
@@ -46,6 +46,7 @@
          "  topic <id>           read a thread"
          "  search <query>       search the archive"
          "  categories           list categories"
+         "  category <slug> <id> list one category's topics"
          "  reply <id>           reply to a topic (markdown on stdin;"
          "                       needs sign-in via the app)"
          "  summary <id>         AI summary of a thread (needs ai-config)"
@@ -53,6 +54,7 @@
          "  ai-config            show / set the AI endpoint:"
          "                       [--base-url U --api-key K --model M"
          "                        --target-lang L]"
+         "  update-check         check the signed update feed"
          "  doctor               local environment check (offline)"
          ""
          "flags:"

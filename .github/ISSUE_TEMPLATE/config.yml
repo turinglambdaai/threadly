@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation & user guide
+    url: https://threadly.jrtx.site/guide.html
+    about: The user guide and FAQ — most setup and sign-in questions are answered there.

@@ -16,6 +16,7 @@ namespace winrt::RivetHost::implementation {
 namespace {
 
 namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
+namespace mx = winrt::Microsoft::UI::Xaml;
 
 std::filesystem::path executable_path() {
   std::wstring buffer(32768, L'\0');
@@ -650,6 +651,47 @@ void MainWindow::Refresh_Click(winrt::Windows::Foundation::IInspectable const&,
   } else {
     LoadLatest(true);
   }
+}
+
+// About Threadly: version, one-line description, license, and the two
+// family links (product site + issue tracker) — the family About shape.
+winrt::fire_and_forget MainWindow::OnAbout(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  auto panel = mxc::StackPanel{};
+  panel.Spacing(4);
+  auto tagline = mxc::TextBlock{};
+  tagline.Text(L"Read the Racket community, outside the browser.");
+  tagline.TextAlignment(mx::TextAlignment::Center);
+  tagline.Margin({0, 0, 0, 8});
+  auto license = mxc::TextBlock{};
+  license.Text(L"Released under the GNU Affero General Public License v3.0.");
+  license.TextAlignment(mx::TextAlignment::Center);
+  license.FontSize(12);
+  license.Opacity(0.75);
+  auto website = mxc::HyperlinkButton{};
+  website.Content(winrt::box_value(winrt::hstring(L"Website")));
+  website.NavigateUri(winrt::Windows::Foundation::Uri{
+      L"https://threadly.jrtx.site"});
+  website.HorizontalAlignment(mx::HorizontalAlignment::Center);
+  website.Padding({0, 0, 0, 0});
+  auto issue = mxc::HyperlinkButton{};
+  issue.Content(winrt::box_value(winrt::hstring(L"Report an Issue")));
+  issue.NavigateUri(winrt::Windows::Foundation::Uri{
+      L"https://github.com/turinglambdaai/threadly/issues"});
+  issue.HorizontalAlignment(mx::HorizontalAlignment::Center);
+  issue.Padding({0, 0, 0, 0});
+  panel.Children().Append(tagline);
+  panel.Children().Append(license);
+  panel.Children().Append(website);
+  panel.Children().Append(issue);
+
+  auto dialog = mxc::ContentDialog{};
+  dialog.Title(winrt::box_value(L"Threadly v" + wide(rivet_app::kVersion)));
+  dialog.Content(winrt::box_value(panel));
+  dialog.CloseButtonText(L"OK");
+  dialog.XamlRoot(Content().XamlRoot());
+  co_await dialog.ShowAsync();
 }
 
 void MainWindow::StatusBar_Close(winrt::Windows::Foundation::IInspectable const&,

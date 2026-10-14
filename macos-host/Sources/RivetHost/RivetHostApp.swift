@@ -14,6 +14,11 @@ struct ThreadlyApp: App {
                 .environmentObject(model)
                 .environmentObject(model.store)
                 .frame(minWidth: 920, minHeight: 600)
+                .sheet(isPresented: Binding(
+                    get: { model.aboutVisible },
+                    set: { model.aboutVisible = $0 })) {
+                    AboutSheet()
+                }
                 .task { model.start() }
         }
         .commands {
@@ -23,6 +28,11 @@ struct ThreadlyApp: App {
                 Divider()
                 Button("Refresh") { model.store.refresh() }
                     .keyboardShortcut("r", modifiers: [.command])
+            }
+            // Replace the system About panel with the family About sheet
+            // (version, license, site + issue links).
+            CommandGroup(replacing: .appInfo) {
+                Button("About Threadly") { model.aboutVisible = true }
             }
         }
         .windowStyle(.automatic)
@@ -35,6 +45,7 @@ final class AppModel: ObservableObject {
     @Published var ready = false
     @Published var bootStatus = "Starting engine…"
     @Published var updateOutcome: Result<UpdateService.CheckResult, Error>?
+    @Published var aboutVisible = false
 
     var pendingUpdateManifest: UpdateService.Manifest? {
         if case .success(.available(let m)) = updateOutcome {

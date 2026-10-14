@@ -955,6 +955,31 @@ void on_summarize_clicked(GtkButton*, gpointer) { run_ai(true); }
 
 void on_translate_clicked(GtkButton*, gpointer) { run_ai(false); }
 
+// ---- about -----------------------------------------------------------------
+
+// The family About shape: program name + version, one-line description,
+// license line, and the product site as the website link (the issue
+// tracker lives one click away on GitHub).
+void show_about_dialog() {
+  auto* dialog = gtk_about_dialog_new();
+  gtk_about_dialog_set_program_name(GTK_ABOUT_DIALOG(dialog), "Threadly");
+  gtk_about_dialog_set_version(GTK_ABOUT_DIALOG(dialog), rivet_app::kVersion);
+  gtk_about_dialog_set_comments(GTK_ABOUT_DIALOG(dialog),
+                                "Read the Racket community, outside the "
+                                "browser.");
+  gtk_about_dialog_set_license(
+      GTK_ABOUT_DIALOG(dialog),
+      "Released under the GNU Affero General Public License v3.0.");
+  gtk_about_dialog_set_website(GTK_ABOUT_DIALOG(dialog),
+                               "https://threadly.jrtx.site");
+  gtk_about_dialog_set_website_label(GTK_ABOUT_DIALOG(dialog), "Website");
+  gtk_window_set_transient_for(GTK_WINDOW(dialog), g_state.window);
+  gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
+void on_about_clicked(GtkButton*, gpointer) { show_about_dialog(); }
+
 // ---- actions -------------------------------------------------------------------------
 
 // Drop-down navigation: 0 = Latest, 1 = Notifications, n = category_order[n-2].
@@ -1302,6 +1327,8 @@ GtkWidget* build_sidebar() {
   gtk_widget_set_sensitive(translate, FALSE);
   auto* refresh = gtk_button_new_from_icon_name("view-refresh-symbolic");
   gtk_widget_set_tooltip_text(refresh, "Refresh");
+  auto* about = gtk_button_new_from_icon_name("help-about-symbolic");
+  gtk_widget_set_tooltip_text(about, "About Threadly");
   gtk_box_append(GTK_BOX(header), back);
   gtk_box_append(GTK_BOX(header), heading);
   gtk_box_append(GTK_BOX(header), summarize);
@@ -1309,6 +1336,7 @@ GtkWidget* build_sidebar() {
   gtk_box_append(GTK_BOX(header), reply);
   gtk_box_append(GTK_BOX(header), account);
   gtk_box_append(GTK_BOX(header), refresh);
+  gtk_box_append(GTK_BOX(header), about);
   g_state.back_button = GTK_BUTTON(back);
   g_state.refresh_button = GTK_BUTTON(refresh);
   g_state.reply_button = GTK_BUTTON(reply);
@@ -1321,6 +1349,7 @@ GtkWidget* build_sidebar() {
                    nullptr);
   g_signal_connect(translate, "clicked", G_CALLBACK(on_translate_clicked),
                    nullptr);
+  g_signal_connect(about, "clicked", G_CALLBACK(on_about_clicked), nullptr);
 
   // Discourse category navigation: a drop-down whose index 0 is Latest
   // and whose remaining entries are the forum's categories in order.

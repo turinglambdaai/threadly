@@ -5,6 +5,28 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+### Added
+- About on every desktop: macOS grows an "About Threadly" app-menu item
+  opening a sheet (version, copyright, license line, product site +
+  "Report an Issue" links); Windows gets an About button in the sidebar
+  header opening the same-shape dialog; Linux a help-about button opening
+  a GTK about dialog. All three carry the AGPL-3.0 line and the
+  threadly.jrtx.site / GitHub-issues links.
+- Windows update-failure dialogs ("Update failed" family) gain a
+  "Copy error" secondary button that puts the failure text on the
+  clipboard — macOS status lines were already selectable; Linux dialogs
+  take selection. Error text always leaves the screen with the user.
+- GitHub issue templates (bug report, feature request, contact links to
+  the user guide).
+
+### Changed
+- CLI `usage` now lists the `category` and `update-check` subcommands —
+  both were implemented but missing from the help text.
+
+### Fixed
+- Invoking the CLI with no command crashed with a contract violation
+  before the usage/exit-2 path could run; it now prints usage and exits 2.
+
 ## 0.11.0 - 2026-10-14
 
 The last update-engine bypass in the family is gone: the update engine
