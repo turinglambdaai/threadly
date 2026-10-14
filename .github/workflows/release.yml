@@ -240,3 +240,22 @@ jobs:
             --notes-file /tmp/notes.md \
             *.zip *.tar.gz *.dmg *.msi *.deb *.rpm *.AppImage \
             *.sha256 SHA256SUMS update-manifest.json
+      - name: Stable alias copies (versionless direct-download links)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Family rule: download buttons point at
+          # releases/latest/download/<alias>, so every release also ships
+          # versionless copies of the primary installers. Aliases are
+          # overwritten on each release; the versioned assets stay canonical.
+          mkdir -p stable-alias
+          cp "dist/threadly-${VERSION}-macos-arm64.dmg" stable-alias/threadly-macos-arm64.dmg
+          cp "dist/threadly-${VERSION}-macos-x64.dmg" stable-alias/threadly-macos-x64.dmg
+          cp "dist/threadly-${VERSION}-windows-x64.msi" stable-alias/threadly-windows-x64.msi
+          cp "dist/threadly-${VERSION}-linux-amd64.deb" stable-alias/threadly-linux-x64.deb
+          cp "dist/threadly-${VERSION}-linux-arm64.deb" stable-alias/threadly-linux-arm64.deb
+          cp "dist/threadly-${VERSION}-linux-x86_64.AppImage" stable-alias/threadly-linux-x64.AppImage
+          cp "dist/threadly-${VERSION}-linux-aarch64.AppImage" stable-alias/threadly-linux-arm64.AppImage
+          gh release upload "$GITHUB_REF_NAME" stable-alias/* --clobber -R turinglambdaai/threadly
