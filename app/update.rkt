@@ -482,8 +482,11 @@
                              "actual" actual))
     ;; The replaced image must stay executable: rename carries the temp
     ;; file's modes, so set them explicitly before the swap. 0o755 =
-    ;; rwxr-xr-x — the setter takes the integer bit form.
-    (file-or-directory-permissions temporary #o755)
+    ;; rwxr-xr-x — the setter takes the integer bit form, and it is POSIX
+    ;; only: Windows rejects permission bits outright (the flow never runs
+    ;; there in production; tests exercise the mechanics on every OS).
+    (unless (eq? (system-type 'os) 'windows)
+      (file-or-directory-permissions temporary #o755))
     (rename-file-or-directory temporary self #t)
     self))
 

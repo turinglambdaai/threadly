@@ -317,9 +317,11 @@
   (dynamic-wind
     void
     (lambda ()
-      (case (system-type 'os)
-        [(linux) (check-true (upd:appimage-flavor?))]
-        [else (check-false (upd:appimage-flavor?))])
+      ;; With the env marker set, flavor detection must agree with the
+      ;; platform symbol (linux-only by construction; note system-type's os
+      ;; is 'unix on Linux, so the platform symbol is the stable predicate).
+      (check-equal? (upd:appimage-flavor?)
+                    (eq? (upd:platform-symbol) 'linux))
       (parameterize ([current-data-dir test-data-dir])
         (upd:reset-update-state!)
         (upd:set-candidate! candidate)
@@ -330,9 +332,11 @@
         (check-equal? (hash-ref (upd:update-state-snapshot) 'percent) 100)
         ;; the staged temp image was renamed over the running one
         (check-equal? (length (directory-list image-dir)) 1)
-        ;; the swapped image is executable
-        (check-not-false
-         (memq 'execute (file-or-directory-permissions image-path #f)))))
+        ;; the swapped image is executable (POSIX; Windows keeps no
+        ;; executable bit and the getter reports no 'execute there)
+        (unless (eq? (system-type 'os) 'windows)
+          (check-not-false
+           (memq 'execute (file-or-directory-permissions image-path #f))))))
     (lambda ()
       (putenv "APPIMAGE" "")
       (delete-file image-path)
