@@ -5,6 +5,23 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+## 0.12.0 - 2026-10-14
+
+Linux is the last host on the family update surface, and this release
+comes with one rollout note: **starting with 0.12.0, Linux AppImage
+installs update themselves in place** — Threadly checks, verifies,
+swaps the sibling `.AppImage` over the running image and re-executes,
+no terminal and no manual re-download. That flow does not exist in
+0.11.0 or earlier, so **AppImage users on those versions must upgrade
+one last time by hand**: download
+`threadly-0.12.0-linux-x86_64.AppImage` (or
+`threadly-0.12.0-linux-aarch64.AppImage` on arm64) from this release,
+replace your existing AppImage file with it, make it executable
+(`chmod +x`) if needed, and launch. From then on every future release
+updates itself inside the app. deb/rpm installs keep their package
+manager, portable installs keep the hand-off flow; macOS and Windows
+were already self-updating.
+
 ### Added
 - Linux update flow, the last host on the shared backend update surface:
   a silent launch check throttled to once per 4 hours (local stamp file,
