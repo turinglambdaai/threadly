@@ -33,8 +33,9 @@ struct MainWindow : MainWindowT<MainWindow> {
                   Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void Refresh_Click(winrt::Windows::Foundation::IInspectable const& sender,
                      Microsoft::UI::Xaml::RoutedEventArgs const& args);
-  void OnAbout(winrt::Windows::Foundation::IInspectable const& sender,
-               Microsoft::UI::Xaml::RoutedEventArgs const& args);
+  winrt::fire_and_forget OnAbout(
+      winrt::Windows::Foundation::IInspectable const& sender,
+      Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void StatusBar_Close(winrt::Windows::Foundation::IInspectable const& sender,
                        winrt::Windows::Foundation::IInspectable const& args);
   void CheckForUpdates_Click(winrt::Windows::Foundation::IInspectable const& sender,
