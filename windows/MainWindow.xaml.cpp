@@ -658,24 +658,24 @@ void MainWindow::Refresh_Click(winrt::Windows::Foundation::IInspectable const&,
 winrt::fire_and_forget MainWindow::OnAbout(
     winrt::Windows::Foundation::IInspectable const&,
     Microsoft::UI::Xaml::RoutedEventArgs const&) {
-  auto panel = mxc::StackPanel{};
+  auto panel = muxc::StackPanel{};
   panel.Spacing(4);
-  auto tagline = mxc::TextBlock{};
+  auto tagline = muxc::TextBlock{};
   tagline.Text(L"Read the Racket community, outside the browser.");
   tagline.TextAlignment(mx::TextAlignment::Center);
   tagline.Margin({0, 0, 0, 8});
-  auto license = mxc::TextBlock{};
+  auto license = muxc::TextBlock{};
   license.Text(L"Released under the GNU Affero General Public License v3.0.");
   license.TextAlignment(mx::TextAlignment::Center);
   license.FontSize(12);
   license.Opacity(0.75);
-  auto website = mxc::HyperlinkButton{};
+  auto website = muxc::HyperlinkButton{};
   website.Content(winrt::box_value(winrt::hstring(L"Website")));
   website.NavigateUri(winrt::Windows::Foundation::Uri{
       L"https://threadly.jrtx.site"});
   website.HorizontalAlignment(mx::HorizontalAlignment::Center);
   website.Padding({0, 0, 0, 0});
-  auto issue = mxc::HyperlinkButton{};
+  auto issue = muxc::HyperlinkButton{};
   issue.Content(winrt::box_value(winrt::hstring(L"Report an Issue")));
   issue.NavigateUri(winrt::Windows::Foundation::Uri{
       L"https://github.com/turinglambdaai/threadly/issues"});
@@ -686,7 +686,7 @@ winrt::fire_and_forget MainWindow::OnAbout(
   panel.Children().Append(website);
   panel.Children().Append(issue);
 
-  auto dialog = mxc::ContentDialog{};
+  auto dialog = muxc::ContentDialog{};
   dialog.Title(winrt::box_value(L"Threadly v" + wide(rivet_app::kVersion)));
   dialog.Content(winrt::box_value(panel));
   dialog.CloseButtonText(L"OK");
