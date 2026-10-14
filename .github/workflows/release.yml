@@ -12,11 +12,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Rivet tag releases build against (family pin discipline; ci.yml
-  # checks out the same ref). v0.11.0 — the rivet/distribution update
-  # engine, RivetUpdate on macOS, package-target consumption on
-  # Linux/Windows.
-  RIVET_COMMIT: v0.11.0
+  # Single source of truth for the rivet pin (same value as ci.yml); every
+  # install step below references this so a bump is one edit. v0.11.0 —
+  # the rivet/distribution update engine, RivetUpdate on macOS,
+  # package-target consumption on Linux/Windows.
+  RIVET_PIN: v0.11.0
 
 jobs:
   macos:
@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
-          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_COMMIT"
+          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_PIN"
           raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
       - name: Version preflight (VERSION == rivet.rktd == app/version.rkt == tag)
         run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
@@ -90,7 +90,7 @@ jobs:
         shell: pwsh
         run: |
           git clone https://github.com/turinglambdaai/rivet.git "$env:RUNNER_TEMP\rivet"
-          git -C "$env:RUNNER_TEMP\rivet" checkout $env:RIVET_COMMIT
+          git -C "$env:RUNNER_TEMP\rivet" checkout $env:RIVET_PIN
           raco pkg install --auto --no-docs --name rivet --link "$env:RUNNER_TEMP\rivet"
       - name: Install WiX (v5; rivet's MSI toolchain)
         run: dotnet tool install --global wix --version 5.0.2
@@ -133,6 +133,8 @@ jobs:
           - { arch: arm64, runner: ubuntu-24.04-arm, racket-arch: arm64 }
     steps:
       - uses: actions/checkout@v4
+      # GitHub does not allow expressions in `uses:`, so this action pin
+      # stays literal — keep it in sync with RIVET_PIN above.
       - name: Set up embeddable Racket CS
         uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.11.0
       # The source-built minimal runtime ships without the packages that
@@ -145,7 +147,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
-          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_COMMIT"
+          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_PIN"
           raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
       - name: Install GTK4, WebKitGTK, rpm and packaging tooling
         run: |
@@ -202,7 +204,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
-          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_COMMIT"
+          git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_PIN"
           raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
       - uses: actions/download-artifact@v4
         with:
