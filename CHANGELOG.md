@@ -5,7 +5,7 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
-## 0.12.0 - 2026-10-14
+## 0.12.0 - 2026-10-15
 
 Linux is the last host on the family update surface, and this release
 comes with one rollout note: **starting with 0.12.0, Linux AppImage
