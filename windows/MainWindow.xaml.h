@@ -81,7 +81,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::fire_and_forget PasteCodeDialogAsync();
   winrt::fire_and_forget SignOutConfirmAsync();
   winrt::fire_and_forget ReplyDialogAsync();
-  void LikePost(std::int64_t post_id);
+  void LikePost(std::int64_t post_id, bool like);
   void RunAI(bool const summarize);
   // Reader document assembly with the forum's like state on each post.
   void UpdateAIButtons(bool const busy);

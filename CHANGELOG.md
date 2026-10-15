@@ -5,6 +5,22 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+### Added
+- Un-liking on every desktop: a second click on a liked post now removes
+  the like. The reader routes the click (by the button's own state) to a
+  new `unlike-post` RPC carrying the engine's was_deleted direction, and
+  one settle path repaints the button from the server's answer — heart,
+  count, and tooltip move together, and a failed call re-enables the
+  button instead of leaving it stuck.
+- The branded installer experience declared in `rivet.rktd` now takes
+  effect: the macOS DMG ships the drag-to-install layout (background
+  art, an /Applications symlink, placed icons, hidden status bar) and
+  the Windows MSI gains the stock wizard sequence (welcome, license,
+  install dir, progress, exit) with Threadly artwork and an
+  auto-rendered license page. This rides a rivet pin advance from
+  v0.11.0 to the rivet revision that implements it
+  (cb97b88ad27dc604ef235f47e8e8c040ffd0670b — main, no tag yet).
+
 ## 0.12.0 - 2026-10-15
 
 Linux is the last host on the family update surface, and this release

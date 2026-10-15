@@ -13,10 +13,10 @@ concurrency:
 
 env:
   # Single source of truth for the rivet pin (same value as ci.yml); every
-  # install step below references this so a bump is one edit. v0.11.0 —
-  # the rivet/distribution update engine, RivetUpdate on macOS,
-  # package-target consumption on Linux/Windows.
-  RIVET_PIN: v0.11.0
+  # install step below references this so a bump is one edit. Pinned to a
+  # rivet main revision (no tag yet) for the branded installer experience:
+  # dmg-background layout, WiX wizard bitmaps, deb desktop refresh.
+  RIVET_PIN: cb97b88ad27dc604ef235f47e8e8c040ffd0670b
 
 jobs:
   macos:
@@ -136,7 +136,7 @@ jobs:
       # GitHub does not allow expressions in `uses:`, so this action pin
       # stays literal — keep it in sync with RIVET_PIN above.
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.11.0
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@cb97b88ad27dc604ef235f47e8e8c040ffd0670b
       # The source-built minimal runtime ships without the packages that
       # provide `raco make` (compiler-lib) and `raco ctool` (cext-lib),
       # which `raco rivet build` drives; crypto is a rivet/distribution

@@ -259,6 +259,18 @@
           #f)])
     (like-post (string->number post-id) #t)))
 
+;; Un-like a post (needs read|write scope) — the engine's was_deleted
+;; direction, wired to a second click on a liked post. Returns #t on
+;; success so hosts can tell it apart from the failure #f.
+(define-rpc (unlike-post [post-id String] : Bool)
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (notify (exn-message e))
+          #f)])
+    (like-post (string->number post-id) #f)
+    #t))
+
 ;; Marks all notifications read — hosts call it after listing the
 ;; Notifications scope (the forum's own mark-on-view behavior).
 (define-rpc (notifications-mark-read : Void)

@@ -566,9 +566,10 @@ private struct DetailView: View {
 
 /// The whole thread renders as one HTML document in a single WKWebView —
 /// the forum's own cooked HTML with a reader stylesheet, light and dark.
-/// The like button rides a script-message bridge: JS posts "like:<id>",
-/// the host runs the RPC, and the result is applied back with
-/// threadlyLiked() so the button always reflects the server.
+/// The like button rides a script-message bridge: JS posts "like:<id>"
+/// or "unlike:<id>", the host runs the RPC, and the result is applied
+/// back with threadlyLikeSettled() so the button always reflects the
+/// server.
 struct ThreadWebView: NSViewRepresentable {
     let document: String
     let store: ThreadlyStore?
@@ -616,14 +617,28 @@ struct ThreadWebView: NSViewRepresentable {
             // message properties are main-actor isolated; parse inside the hop
             Task { @MainActor in
                 guard message.name == "threadly",
-                      let text = message.body as? String,
-                      text.hasPrefix("like:"),
-                      let postId = Int(text.dropFirst(5)) else { return }
-                guard let store = self.store else { return }
+                      let text = message.body as? String else { return }
+                // the button's own class is the direction: a click on a
+                // liked post asks for unlike
+                let requested: (liked: Bool, postId: Int?)
+                if text.hasPrefix("like:") {
+                    requested = (true, Int(text.dropFirst(5)))
+                } else if text.hasPrefix("unlike:") {
+                    requested = (false, Int(text.dropFirst(7)))
+                } else {
+                    return
+                }
+                guard let postId = requested.postId, let store = self.store else { return }
                 self.view?.evaluateJavaScript("threadlyLikePending(\(postId))", completionHandler: nil)
-                store.likePost(postId) { ok in
-                    self.view?.evaluateJavaScript("threadlyLiked(\(postId), \(ok))",
-                                                  completionHandler: nil)
+                let settle: (Bool) -> Void = { (ok: Bool) in
+                    self.view?.evaluateJavaScript(
+                        "threadlyLikeSettled(\(postId), \(ok), \(requested.liked))",
+                        completionHandler: nil)
+                }
+                if requested.liked {
+                    store.likePost(postId, completion: settle)
+                } else {
+                    store.unlikePost(postId, completion: settle)
                 }
             }
         }
@@ -646,7 +661,7 @@ struct ThreadWebView: NSViewRepresentable {
                 let count = post.likeCount > 0
                     ? "<span class=\"count\">\(post.likeCount)</span>" : ""
                 let likedClass = post.liked ? " class=\"liked\"" : ""
-                like = "<button\(likedClass) class=\"like\" id=\"like-\(post.postId)\" onclick=\"threadlyLike(\(post.postId))\" title=\"Like this post\">\(heart)\(count)</button>"
+                like = "<button\(likedClass) class=\"like\" id=\"like-\(post.postId)\" onclick=\"threadlyLike(\(post.postId))\" title=\"\(post.liked ? "Unlike this post" : "Like this post")\">\(heart)\(count)</button>"
             } else if post.likeCount > 0 {
                 like = "<span class=\"count\">\(post.likeCount) ♥</span>"
             }
@@ -733,27 +748,31 @@ struct ThreadWebView: NSViewRepresentable {
         <script>
         function threadlyLike(id) {
           var b = document.getElementById('like-' + id);
-          if (b && b.classList.contains('liked')) return;  // already liked
-          window.webkit.messageHandlers.threadly.postMessage("like:" + id);
+          if (!b || b.disabled) return;
+          window.webkit.messageHandlers.threadly.postMessage(
+            (b.classList.contains('liked') ? 'unlike:' : 'like:') + id);
         }
         function threadlyLikePending(id) {
           var b = document.getElementById('like-' + id);
           if (b) b.disabled = true;
         }
-        function threadlyLiked(id, ok) {
+        // Both directions settle here: the button always wakes up (a
+        // failed call must not leave it stuck), and on success the
+        // content repaints from the settled state so heart, count, and
+        // tooltip move together.
+        function threadlyLikeSettled(id, ok, liked) {
           var b = document.getElementById('like-' + id);
-          if (!b || !ok) return;
+          if (!b) return;
           b.disabled = false;
-          b.classList.add('liked');
-          var count = b.querySelector('.count');
-          if (!count) {
-            count = document.createElement('span');
-            count.className = 'count';
-            b.appendChild(count);
-          }
-          count.textContent = (parseInt(count.textContent || '0', 10) || 0) + 1;
-          var heart = document.createTextNode('\\u2665');
-          b.insertBefore(heart, count);
+          if (!ok) return;
+          b.classList.toggle('liked', liked);
+          b.title = liked ? 'Unlike this post' : 'Like this post';
+          var n = b.querySelector('.count');
+          var count = n ? (parseInt(n.textContent, 10) || 0) : 0;
+          count += liked ? 1 : -1;
+          if (count < 0) count = 0;
+          b.innerHTML = (liked ? '\\u2665' : '\\u2661') +
+            (count > 0 ? '<span class="count">' + count + '</span>' : '');
         }
         </script></body></html>
         """

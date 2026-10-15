@@ -96,7 +96,8 @@ std::string compact_date(std::string const& iso) {
 // The thread reader: the forum's own cooked HTML with the family reader
 // stylesheet, light and dark. Same 680px column and terracotta accents as
 // the macOS shell. Signed in, every post grows a like button wired to the
-// WebView2 WebMessage bridge ("like:<id>" out, threadlyLiked() back in).
+// WebView2 WebMessage bridge ("like:<id>" / "unlike:<id>" out,
+// threadlyLikeSettled() back in).
 std::string reader_document(
     std::vector<std::vector<std::string>> const& posts, bool const signed_in) {
   std::string body;
@@ -118,7 +119,8 @@ std::string reader_document(
               : "";
       like = "<button class=\"like" + std::string(liked ? " liked" : "") +
              "\" id=\"like-" + row[5] + "\" onclick=\"threadlyLike(" +
-             row[5] + ")\" title=\"Like this post\">" +
+             row[5] + ")\" title=\"" +
+             (liked ? "Unlike this post" : "Like this post") + "\">" +
              (liked ? "&#9829;" : "&#9825;") + count + "</button>";
     } else if (row.size() >= 7 && row[6] != "0") {
       like = "<span class=\"count\">" + row[6] + " &#9829;</span>";
@@ -187,27 +189,30 @@ aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding
 <script>
 function threadlyLike(id) {
   var b = document.getElementById('like-' + id);
-  if (b && b.classList.contains('liked')) return;  // already liked
-  window.chrome.webview.postMessage("like:" + id);
+  if (!b || b.disabled) return;
+  window.chrome.webview.postMessage(
+    (b.classList.contains('liked') ? 'unlike:' : 'like:') + id);
 }
 function threadlyLikePending(id) {
   var b = document.getElementById('like-' + id);
   if (b) b.disabled = true;
 }
-function threadlyLiked(id, ok) {
+// Both directions settle here: the button always wakes up (a failed
+// call must not leave it stuck), and on success the content repaints
+// from the settled state so heart, count, and tooltip move together.
+function threadlyLikeSettled(id, ok, liked) {
   var b = document.getElementById('like-' + id);
-  if (!b || !ok) return;
+  if (!b) return;
   b.disabled = false;
-  b.classList.add('liked');
-  var count = b.querySelector('.count');
-  if (!count) {
-    count = document.createElement('span');
-    count.className = 'count';
-    b.appendChild(count);
-  }
-  count.textContent = (parseInt(count.textContent || '0', 10) || 0) + 1;
-  var heart = document.createTextNode('\u2665');
-  b.insertBefore(heart, count);
+  if (!ok) return;
+  b.classList.toggle('liked', liked);
+  b.title = liked ? 'Unlike this post' : 'Like this post';
+  var n = b.querySelector('.count');
+  var count = n ? (parseInt(n.textContent, 10) || 0) : 0;
+  count += liked ? 1 : -1;
+  if (count < 0) count = 0;
+  b.innerHTML = (liked ? '\u2665' : '\u2661') +
+    (count > 0 ? '<span class="count">' + count + '</span>' : '');
 }
 </script></body></html>)HTML";
 }
@@ -747,8 +752,9 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
     co_await webview.EnsureCoreWebView2Async();
     if (auto window = weak.get()) {
       window->reader_ = webview;
-      // Like bridge: the reader page posts "like:<id>"; bounce to the
-      // RPC and apply the server's answer back into the page. The event
+      // Like bridge: the reader page posts "like:<id>" / "unlike:<id>"
+      // (the button's own class picks the direction); bounce to the RPC
+      // and apply the server's answer back into the page. The event
       // source dies with the reader control, and the handler only ever
       // touches the window through get_weak().
       webview.CoreWebView2().WebMessageReceived(
@@ -756,10 +762,20 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
                  winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebMessageReceivedEventArgs const& args) {
             auto const message = args.TryGetWebMessageAsString();
             auto const text = std::wstring(message.c_str(), message.size());
-            if (text.rfind(L"like:", 0) != 0) return;
-            auto const post_id = std::wcstoll(text.c_str() + 5, nullptr, 10);
+            bool like;
+            wchar_t const* rest;
+            if (text.rfind(L"like:", 0) == 0) {
+              like = true;
+              rest = text.c_str() + 5;
+            } else if (text.rfind(L"unlike:", 0) == 0) {
+              like = false;
+              rest = text.c_str() + 7;
+            } else {
+              return;
+            }
+            auto const post_id = std::wcstoll(rest, nullptr, 10);
             if (auto window = weak.get()) {
-              window->LikePost(post_id);
+              window->LikePost(post_id, like);
             }
           });
     }
@@ -1116,7 +1132,10 @@ void MainWindow::RunAI(bool const summarize) {
   }
 }
 
-void MainWindow::LikePost(std::int64_t const post_id) {
+// like toggles by direction: the reader sends "like:<id>" for a post
+// the user hasn't liked and "unlike:<id>" for one they have (the
+// engine's was_deleted direction).
+void MainWindow::LikePost(std::int64_t const post_id, bool const like) {
   if (signed_in_user_.empty()) return;
   auto const backend = std::atomic_load(&backend_);
   if (backend == nullptr || !backend->running()) return;
@@ -1128,25 +1147,34 @@ void MainWindow::LikePost(std::int64_t const post_id) {
   auto const weak = get_weak();
   try {
     rivet_app::API api(*backend);
-    (void)api.like_post_async(
-        std::to_string(post_id),
-        [dispatcher, weak, post_id](rivet_app::Result<bool> result) {
-          dispatcher.TryEnqueue([weak, post_id, result = std::move(result)]() mutable {
-            if (auto window = weak.get()) {
-              bool ok = false;
-              try {
-                ok = result.get();
-              } catch (...) {
-              }
-              if (auto const reader = window->reader_) {
-                (void)reader.CoreWebView2().ExecuteScriptAsync(
-                    L"threadlyLiked(" + std::to_wstring(post_id) + L", " +
-                    (ok ? L"true" : L"false") + L")");
-              }
-              if (!ok) window->SetStatus("Couldn't like that post.");
-            }
-          });
-        });
+    auto const settle =
+        [dispatcher, weak, post_id, like](rivet_app::Result<bool> result) {
+          dispatcher.TryEnqueue(
+              [weak, post_id, like, result = std::move(result)]() mutable {
+                if (auto window = weak.get()) {
+                  bool ok = false;
+                  try {
+                    ok = result.get();
+                  } catch (...) {
+                  }
+                  if (auto const reader = window->reader_) {
+                    (void)reader.CoreWebView2().ExecuteScriptAsync(
+                        L"threadlyLikeSettled(" + std::to_wstring(post_id) +
+                        L", " + (ok ? L"true" : L"false") + L", " +
+                        (like ? L"true" : L"false") + L")");
+                  }
+                  if (!ok) {
+                    window->SetStatus(like ? "Couldn't like that post."
+                                           : "Couldn't remove that like.");
+                  }
+                }
+              });
+        };
+    if (like) {
+      (void)api.like_post_async(std::to_string(post_id), settle);
+    } else {
+      (void)api.unlike_post_async(std::to_string(post_id), settle);
+    }
   } catch (std::exception const& e) {
     SetErrorUi(e.what());
   }

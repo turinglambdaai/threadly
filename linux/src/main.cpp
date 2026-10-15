@@ -197,7 +197,8 @@ Category category_for(std::int64_t id) {
 // The thread reader: the forum's own cooked HTML with the family reader
 // stylesheet, light and dark. Same 680px column and terracotta accents as
 // the macOS shell. Signed in, every post grows a like button wired to the
-// script-message bridge ("like:<id>" out, threadlyLiked() back in).
+// script-message bridge ("like:<id>" / "unlike:<id>" out,
+// threadlyLikeSettled() back in).
 std::string reader_document(Rows const& posts, bool const signed_in) {
   std::string body;
   for (auto const& row : posts) {
@@ -218,7 +219,8 @@ std::string reader_document(Rows const& posts, bool const signed_in) {
               : "";
       like = "<button class=\"like" + std::string(liked ? " liked" : "") +
              "\" id=\"like-" + row[5] + "\" onclick=\"threadlyLike(" +
-             row[5] + ")\" title=\"Like this post\">" +
+             row[5] + ")\" title=\"" +
+             (liked ? "Unlike this post" : "Like this post") + "\">" +
              (liked ? "&#9829;" : "&#9825;") + count + "</button>";
     } else if (row.size() >= 7 && row[6] != "0") {
       like = "<span class=\"count\">" + row[6] + " &#9829;</span>";
@@ -289,27 +291,30 @@ aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding
 <script>
 function threadlyLike(id) {
   var b = document.getElementById('like-' + id);
-  if (b && b.classList.contains('liked')) return;  // already liked
-  window.webkit.messageHandlers.threadly.postMessage("like:" + id);
+  if (!b || b.disabled) return;
+  window.webkit.messageHandlers.threadly.postMessage(
+    (b.classList.contains('liked') ? 'unlike:' : 'like:') + id);
 }
 function threadlyLikePending(id) {
   var b = document.getElementById('like-' + id);
   if (b) b.disabled = true;
 }
-function threadlyLiked(id, ok) {
+// Both directions settle here: the button always wakes up (a failed
+// call must not leave it stuck), and on success the content repaints
+// from the settled state so heart, count, and tooltip move together.
+function threadlyLikeSettled(id, ok, liked) {
   var b = document.getElementById('like-' + id);
-  if (!b || !ok) return;
+  if (!b) return;
   b.disabled = false;
-  b.classList.add('liked');
-  var count = b.querySelector('.count');
-  if (!count) {
-    count = document.createElement('span');
-    count.className = 'count';
-    b.appendChild(count);
-  }
-  count.textContent = (parseInt(count.textContent || '0', 10) || 0) + 1;
-  var heart = document.createTextNode('\u2665');
-  b.insertBefore(heart, count);
+  if (!ok) return;
+  b.classList.toggle('liked', liked);
+  b.title = liked ? 'Unlike this post' : 'Like this post';
+  var n = b.querySelector('.count');
+  var count = n ? (parseInt(n.textContent, 10) || 0) : 0;
+  count += liked ? 1 : -1;
+  if (count < 0) count = 0;
+  b.innerHTML = (liked ? '\u2665' : '\u2661') +
+    (count > 0 ? '<span class="count">' + count + '</span>' : '');
 }
 </script></body></html>)HTML";
 }
@@ -537,40 +542,54 @@ void update_write_ui() {
 }
 
 int on_like_delivered(gpointer user_data) {
-  std::unique_ptr<std::pair<std::int64_t, bool>> payload(
-      static_cast<std::pair<std::int64_t, bool>*>(user_data));
+  std::unique_ptr<std::tuple<std::int64_t, bool, bool>> payload(
+      static_cast<std::tuple<std::int64_t, bool, bool>*>(user_data));
   if (!g_state.shutting_down.load(std::memory_order_acquire)) {
-    run_reader_js("threadlyLiked(" + std::to_string(payload->first) + "," +
-                  (payload->second ? "true" : "false") + ")");
-    if (!payload->second) status_show("Couldn't like that post.");
+    run_reader_js("threadlyLikeSettled(" + std::to_string(std::get<0>(*payload)) +
+                  "," + (std::get<1>(*payload) ? "true" : "false") + "," +
+                  (std::get<2>(*payload) ? "true" : "false") + ")");
+    if (!std::get<1>(*payload)) {
+      status_show(std::get<2>(*payload) ? "Couldn't like that post."
+                                        : "Couldn't remove that like.");
+    }
   }
   return G_SOURCE_REMOVE;
 }
 
-void like_post(std::int64_t const post_id) {
+// like toggles by direction: the reader sends "like:<id>" for a post
+// the user hasn't liked and "unlike:<id>" for one they have (the
+// engine's was_deleted direction).
+void like_post(std::int64_t const post_id, bool const like) {
   if (g_state.api == nullptr || g_state.signed_in_user.empty()) return;
   run_reader_js("threadlyLikePending(" + std::to_string(post_id) + ")");
-  (void)g_state.api->like_post_async(
-      std::to_string(post_id), [post_id](rivet_app::Result<bool> result) mutable {
-        bool ok = false;
-        try {
-          ok = result.get();
-        } catch (...) {
-        }
-        g_idle_add(
-            [](gpointer user_data) -> int { return on_like_delivered(user_data); },
-            new std::pair<std::int64_t, bool>(post_id, ok));
-      });
+  auto const deliver = [post_id, like](rivet_app::Result<bool> result) mutable {
+    bool ok = false;
+    try {
+      ok = result.get();
+    } catch (...) {
+    }
+    g_idle_add(
+        [](gpointer user_data) -> int { return on_like_delivered(user_data); },
+        new std::tuple<std::int64_t, bool, bool>(post_id, ok, like));
+  };
+  if (like) {
+    (void)g_state.api->like_post_async(std::to_string(post_id), deliver);
+  } else {
+    (void)g_state.api->unlike_post_async(std::to_string(post_id), deliver);
+  }
 }
 
-// The reader page posts "like:<id>" from the per-post button.
+// The reader page posts "like:<id>" / "unlike:<id>" from the per-post
+// button.
 void on_script_message(WebKitUserContentManager*, JSCValue* value, gpointer) {
   if (value == nullptr || !jsc_value_is_string(value)) return;
   char* text = jsc_value_to_string(value);
   std::string const message = text != nullptr ? text : "";
   g_free(text);
   if (message.rfind("like:", 0) == 0) {
-    like_post(std::strtoll(message.c_str() + 5, nullptr, 10));
+    like_post(std::strtoll(message.c_str() + 5, nullptr, 10), true);
+  } else if (message.rfind("unlike:", 0) == 0) {
+    like_post(std::strtoll(message.c_str() + 7, nullptr, 10), false);
   }
 }
 

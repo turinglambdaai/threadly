@@ -193,12 +193,33 @@ final class ThreadlyStore: ObservableObject {
     /// success/failure; the view then moves the button via JS so the
     /// shown state always matches the server.
     func likePost(_ postId: Int, completion: @escaping (Bool) -> Void) {
+        setLike(postId, liked: true, failure: "Couldn't like that post.",
+                completion: completion)
+    }
+
+    /// The second click on a liked post — the engine's was_deleted
+    /// direction. Same contract as likePost: the RPC reports
+    /// success/failure; the view moves the button via JS.
+    func unlikePost(_ postId: Int, completion: @escaping (Bool) -> Void) {
+        setLike(postId, liked: false, failure: "Couldn't remove that like.",
+                completion: completion)
+    }
+
+    private func setLike(_ postId: Int, liked: Bool, failure: String,
+                         completion: @escaping (Bool) -> Void) {
         guard let api else { return }
         Task {
-            let ok = (try? await api.like_post(post_id: String(postId))) ?? false
+            let ok: Bool
+            do {
+                ok = liked
+                    ? try await api.like_post(post_id: String(postId))
+                    : try await api.unlike_post(post_id: String(postId))
+            } catch {
+                ok = false
+            }
             await MainActor.run {
                 if !ok {
-                    self.statusLine = "Couldn't like that post."
+                    self.statusLine = failure
                 }
                 completion(ok)
             }
