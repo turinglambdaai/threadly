@@ -173,6 +173,73 @@
    "signed request"))
 
 (skip-unless-openssl
+;; The like/unlike POST wire shape: a like carries id + post_action_type_id
+;; only, an unlike adds was_deleted=true so the forum removes the like
+;; instead of re-adding it — the direction that pins the unlike path down.
+(test-case "like/unlike wire shape on post_actions"
+  (define (open-loopback-listener)
+    (let loop ([tries 20])
+      (define p (+ 20000 (random 40000)))
+      (with-handlers ([exn:fail?
+                       (λ (_)
+                         (when (zero? tries) (error 'write-test "no free port"))
+                         (loop (sub1 tries)))])
+        (values (tcp-listen p 4 #f "127.0.0.1") p))))
+  (define (capture-post-action! direction)
+    (define-values (listener port) (open-loopback-listener))
+    (define captured (box #f))
+    (define server
+      (thread
+       (lambda ()
+         (define-values (in out) (tcp-accept listener))
+         (define request-line (read-line in 'any))
+         (define headers
+           (let loop2 ([acc (list request-line)])
+             (define line (read-line in 'any))
+             (if (or (eof-object? line) (string=? line ""))
+                 (reverse acc)
+                 (loop2 (cons line acc)))))
+         (define content-length
+           (for/or ([h (in-list headers)]
+                    #:when (string-contains? (string-downcase h) "content-length"))
+             (string->number (substring h (string-length "Content-Length: ")))))
+         (define req-body
+           (and content-length (> content-length 0)
+                (read-string content-length in)))
+         (display "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n" out)
+         (close-input-port in)
+         (close-output-port out)
+         (tcp-close listener)
+         (set-box! captured (list request-line req-body)))))
+    (parameterize ([current-forum-base-url (format "http://127.0.0.1:~a" port)]
+                   [current-data-dir
+                    (make-temporary-file "threadly-like-~a" 'directory)])
+      ;; a stored key makes the request signed without touching the network
+      (define auth-dir (build-path (data-dir) "auth"))
+      (make-directory* auth-dir)
+      (with-output-to-file (build-path auth-dir "user-api-key")
+        (lambda () (display "test-key-like"))
+        #:exists 'truncate)
+      (like-post 4242 direction))
+    (sync/timeout 5 server)
+    (unbox captured))
+
+  (define like (capture-post-action! #t))
+  (check-true (string-contains? (car like) "POST /post_actions.json")
+              "hits the post_actions endpoint")
+  (check-true (string-contains? (cadr like) "id=4242"))
+  (check-true (string-contains? (cadr like) "post_action_type_id=2"))
+  (check-false (string-contains? (cadr like) "was_deleted")
+               "a like never carries was_deleted")
+
+  (define unlike (capture-post-action! #f))
+  (check-true (string-contains? (car unlike) "POST /post_actions.json")
+              "unlike hits the same endpoint")
+  (check-true (string-contains? (cadr unlike) "id=4242"))
+  (check-true (string-contains? (cadr unlike) "post_action_type_id=2"))
+  (check-true (string-contains? (cadr unlike) "was_deleted=true")
+              "unlike carries was_deleted so the forum removes it"))
+
  (test-case "sign-in scopes request read|write|notifications"
    (parameterize ([current-data-dir
                    (make-temporary-file "threadly-scope-~a" 'directory)])
