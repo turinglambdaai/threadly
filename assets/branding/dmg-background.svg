@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="800" viewBox="0 0 1320 800">
+  <!-- Threadly DMG background: rendered at 2x (144dpi) for the 660x400 Finder
+       window. Icon slots sit at window {130,160} and {450,160} (2x centers
+       340/980 on the y=400 midline); keep both regions free of artwork. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#faf5f1"/>
+      <stop offset="1" stop-color="#f2e4db"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#c15f3c" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#c15f3c" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1320" height="800" fill="url(#bg)"/>
+  <rect x="14" y="14" width="1292" height="772" rx="26" fill="none" stroke="#c15f3c" stroke-opacity="0.16" stroke-width="2"/>
+
+  <text x="660" y="150" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="88" font-weight="600" letter-spacing="2" fill="#2b211b">Threadly</text>
+  <text x="660" y="216" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="34" font-weight="400" fill="#2b211b" fill-opacity="0.62">A native client for the Racket community forum</text>
+
+  <!-- drag hint: from the app slot (left) into Applications (right) -->
+  <path d="M 430 390 C 550 322, 730 322, 848 378"
+        fill="none" stroke="url(#arrow)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M 828 350 L 858 384 L 812 392 Z" fill="#c15f3c" fill-opacity="0.9"/>
+
+  <text x="660" y="672" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="30" font-weight="400" fill="#2b211b" fill-opacity="0.55">Drag Threadly into Applications to install</text>
+</svg>
