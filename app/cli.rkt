@@ -23,18 +23,19 @@
 
 ;; ---- argument parsing -------------------------------------------------------
 
-;; → (values command positionals page json? no-cache?)
+;; → (values command positionals page json? no-cache? all?)
 (define (parse-args args)
-  (let loop ([as args] [pos '()] [page 0] [json? #f] [no-cache? #f])
+  (let loop ([as args] [pos '()] [page 0] [json? #f] [no-cache? #f] [all? #f])
     (match as
       ['() (values (and (pair? pos) (first (reverse pos)))
                    (if (pair? pos) (rest (reverse pos)) '())
-                   page json? no-cache?)]
-      [(cons "--json" rest) (loop rest pos page #t no-cache?)]
-      [(cons "--no-cache" rest) (loop rest pos page json? #t)]
+                   page json? no-cache? all?)]
+      [(cons "--json" rest) (loop rest pos page #t no-cache? all?)]
+      [(cons "--no-cache" rest) (loop rest pos page json? #t all?)]
+      [(cons "--all" rest) (loop rest pos page json? no-cache? #t)]
       [(cons "--page" (cons n rest))
-       (loop rest pos (or (string->number n) 0) json? no-cache?)]
-      [(cons other rest) (loop rest (cons other pos) page json? no-cache?)])))
+       (loop rest pos (or (string->number n) 0) json? no-cache? all?)]
+      [(cons other rest) (loop rest (cons other pos) page json? no-cache? all?)])))
 
 (define (usage)
   (string-join
@@ -43,7 +44,8 @@
          "commands:"
          "  version              print the app version"
          "  latest [--page N]    list the latest forum topics"
-         "  topic <id>           read a thread"
+         "  topic <id> [--all]   read a thread (--all: every post,"
+         "                       text view only)"
          "  search <query>       search the archive"
          "  categories           list categories"
          "  category <slug> <id> list one category's topics"
@@ -91,11 +93,13 @@
                    (~a (topic-summary-category-id t) #:min-width 4)
                    (topic-summary-title t)))))
 
-(define (cmd-topic id json?)
-  (define doc (fetch-json-cached (format "/t/~a.json" id)))
+(define (cmd-topic id json? [all? #f])
   (if json?
-      (print-json doc)
-      (let-values ([(topic posts) (parse-topic doc)])
+      (print-json (fetch-json-cached (format "/t/~a.json" id)))
+      (let-values ([(topic posts)
+                    (if all?
+                        (fetch-topic-all (string->number id))
+                        (fetch-topic (string->number id)))])
         (displayln (topic-summary-title topic))
         (displayln (make-string (min 72 (max 16 (string-length (topic-summary-title topic)))) #\u2500))
         (for ([p (in-list posts)])
@@ -235,7 +239,7 @@
 ;; ---- entry ------------------------------------------------------------------
 
 (define (main args)
-  (define-values (command positionals page json? no-cache?)
+  (define-values (command positionals page json? no-cache? all?)
     (parse-args args))
   (cond
     [(not command)
@@ -248,7 +252,7 @@
          ["latest" (cmd-latest page json?)]
          ["topic"
           (match positionals
-            [(list id) (cmd-topic id json?)]
+            [(list id) (cmd-topic id json? all?)]
             [_ (displayln (usage) (current-error-port)) (exit 2)])]
          ["search"
           (match positionals

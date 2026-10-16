@@ -95,21 +95,36 @@
              (~a (topic-summary-like-count t))
              (or (topic-summary-last-posted-at t) ""))))))
 
+;; The reader's post rows: 8 display columns plus the thread's total
+;; post count, which tells the reader whether the thread continues past
+;; this chunk (the "load all" bar renders from it).
+(define (post-rows posts total)
+  (for/list ([p (in-list posts)])
+    (list (forum-post-username p)
+          (avatar-url (forum-post-avatar-template p))
+          (forum-post-cooked p)
+          (or (forum-post-created-at p) "")
+          (~a (forum-post-post-number p))
+          ;; post id — the like button targets it via the webview bridge
+          (~a (forum-post-id p))
+          (~a (forum-post-like-count p))
+          (if (forum-post-liked? p) "1" "0")
+          (~a total))))
+
 (define-rpc (topic-open [id String] : (List (List String)))
   (rows-or-notify
    (lambda ()
-     (define-values (_topic posts)
+     (define-values (topic posts)
        (fetch-topic (string->number id)))
-     (for/list ([p (in-list posts)])
-       (list (forum-post-username p)
-             (avatar-url (forum-post-avatar-template p))
-             (forum-post-cooked p)
-             (or (forum-post-created-at p) "")
-             (~a (forum-post-post-number p))
-             ;; post id — the like button targets it via the webview bridge
-             (~a (forum-post-id p))
-             (~a (forum-post-like-count p))
-             (if (forum-post-liked? p) "1" "0"))))))
+     (post-rows posts (topic-summary-posts-count topic)))))
+
+;; Every post of a thread, for the reader's "load all" bar.
+(define-rpc (topic-posts-all [id String] : (List (List String)))
+  (rows-or-notify
+   (lambda ()
+     (define-values (topic posts)
+       (fetch-topic-all (string->number id)))
+     (post-rows posts (topic-summary-posts-count topic)))))
 
 (define-rpc (search-list [q String] : (List (List String)))
   (rows-or-notify

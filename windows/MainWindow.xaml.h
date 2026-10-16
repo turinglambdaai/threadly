@@ -82,6 +82,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::fire_and_forget SignOutConfirmAsync();
   winrt::fire_and_forget ReplyDialogAsync();
   void LikePost(std::int64_t post_id, bool like);
+  void LoadAllPosts();
   void RunAI(bool const summarize);
   // Reader document assembly with the forum's like state on each post.
   void UpdateAIButtons(bool const busy);
@@ -128,9 +129,13 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool suppress_category_{false};
   bool update_downloading_{false};
   // Signed-in identity (empty when signed out) and the topic currently
-  // shown in the reader — the reply composer targets it.
+  // shown in the reader — the reply composer targets it. reader_shown_
+  // is how many posts the page has rendered; the "load all" tail starts
+  // there. load_all_in_flight_ keeps a second click from double-loading.
   std::wstring signed_in_user_;
   std::int64_t open_topic_id_{0};
+  std::size_t reader_shown_{0};
+  bool load_all_in_flight_{false};
   bool sign_in_running_{false};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer check_timer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer update_timer_{nullptr};

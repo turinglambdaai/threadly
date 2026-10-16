@@ -25,6 +25,8 @@
          parse-latest
          fetch-topic
          parse-topic
+         fetch-topic-all
+         fetch-topic-all-batch-size
          fetch-search
          parse-search
          fetch-categories
@@ -129,26 +131,29 @@
     (parse-topic-summary t)))
 
 ;; /t/<id>.json → (values topic-summary (listof forum-post))
+(define (parse-post p)
+  ;; like state lives in actions_summary under the like action (id 2);
+  ;; `acted` only appears on signed-in requests — that's the "you
+  ;; liked this" flag the like buttons render from.
+  (define like-action
+    (for/or ([a (in-list (hash-ref p 'actions_summary (list)))])
+      (and (eq? (hash-ref a 'id 0) 2) a)))
+  (forum-post (hash-ref p 'id 0)
+              (hash-ref p 'username "")
+              (hash-ref p 'avatar_template "")
+              (json-clean (hash-ref p 'created_at #f))
+              (hash-ref p 'cooked "")
+              (hash-ref p 'post_number 0)
+              (or (and like-action (hash-ref like-action 'count #f)) 0)
+              (and like-action (eq? (json-clean (hash-ref like-action 'acted #f)) #t))))
+
 (define (parse-topic doc)
   (hash-or-fail 'parse-topic doc)
   (define topic (parse-topic-summary doc))
   (define post-stream (hash-ref doc 'post_stream (hasheq)))
   (define posts
     (for/list ([p (in-list (hash-ref post-stream 'posts (list)))])
-      ;; like state lives in actions_summary under the like action (id 2);
-      ;; `acted` only appears on signed-in requests — that's the "you
-      ;; liked this" flag the like buttons render from.
-      (define like-action
-        (for/or ([a (in-list (hash-ref p 'actions_summary (list)))])
-          (and (eq? (hash-ref a 'id 0) 2) a)))
-      (forum-post (hash-ref p 'id 0)
-                  (hash-ref p 'username "")
-                  (hash-ref p 'avatar_template "")
-                  (json-clean (hash-ref p 'created_at #f))
-                  (hash-ref p 'cooked "")
-                  (hash-ref p 'post_number 0)
-                  (or (and like-action (hash-ref like-action 'count #f)) 0)
-                  (and like-action (eq? (json-clean (hash-ref like-action 'acted #f)) #t)))))
+      (parse-post p)))
   (values topic posts))
 
 ;; /search.json?q=… → (listof search-result)
@@ -177,6 +182,55 @@
 
 (define (fetch-topic id)
   (parse-topic (fetch-json-cached (format "/t/~a.json" id))))
+
+;; The whole thread. /t/<id>.json supplies the topic, the first chunk of
+;; posts, and `stream` — every post id in reading order; posts past the
+;; first chunk come from /t/<id>/posts.json in batches of post_ids[]
+;; (the same call the forum's own web app makes). Those batches are
+;; signed like every read but skip the disk cache: each is one slice of
+;; a moving whole, and caching slices would pin a thread to its old tail.
+(define fetch-topic-all-batch-size (make-parameter 20))
+
+;; Split a list into consecutive groups of n (the last one short).
+;; racket/list here has no in-slice to lean on.
+(define (chunk n xs)
+  (if (null? xs)
+      (list)
+      (let ([part (take xs (min n (length xs)))])
+        (cons part (chunk n (list-tail xs (length part)))))))
+
+(define (fetch-topic-all id)
+  (define doc (fetch-json-cached (format "/t/~a.json" id)))
+  (hash-or-fail 'fetch-topic-all doc)
+  (define topic (parse-topic-summary doc))
+  (define post-stream (hash-ref doc 'post_stream (hasheq)))
+  (define head
+    (for/list ([p (in-list (hash-ref post-stream 'posts (list)))])
+      (parse-post p)))
+  (define head-ids
+    (for/hasheq ([p (in-list head)]) (values (forum-post-id p) #t)))
+  (define rest-ids
+    (for/list ([i (in-list (hash-ref post-stream 'stream (list)))]
+               #:unless (hash-ref head-ids i #f))
+      i))
+  (define rest
+    (for/list ([ids (in-list (chunk (fetch-topic-all-batch-size) rest-ids))])
+      (define doc2
+        (fetch-json
+         (string-append
+          (current-forum-base-url)
+          (format "/t/~a/posts.json?~a" id
+                  (string-join
+                   (for/list ([i (in-list ids)]) (format "post_ids[]=~a" i))
+                   "&")))))
+      (for/list ([p (in-list (hash-ref (hash-ref doc2 'post_stream (hasheq))
+                                       'posts (list)))])
+        (parse-post p))))
+  ;; the stream lists post ids in reading order, so the merged list is
+  ;; kept in post-number order no matter what the batches returned
+  (values topic
+          (sort (append head (append* rest))
+                < #:key forum-post-post-number)))
 
 ;; A category page (/c/<slug>/<id>.json) carries the same topic_list shape
 ;; as latest — parse-latest handles it.

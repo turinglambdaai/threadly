@@ -6,6 +6,15 @@ All notable changes to Threadly are documented here. Format follows
 ## Unreleased
 
 ### Added
+- Long threads read in full: a thread longer than the forum's first
+  page now shows a "Showing 20 of 87 posts · Load all" bar at the top
+  of the reader; loading appends the remaining posts in place, so the
+  scroll position survives. The engine fetches the tail through
+  Discourse's post_ids[] batches (signed like every read, uncached —
+  each batch is one slice of a moving whole), and the CLI grows
+  `topic <id> --all` for the same in a terminal.
+
+### Added
 - Un-liking on every desktop: a second click on a liked post now removes
   the like. The reader routes the click (by the button's own state) to a
   new `unlike-post` RPC carrying the engine's was_deleted direction, and

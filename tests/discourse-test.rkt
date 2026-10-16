@@ -103,3 +103,88 @@
   (check-equal? (html->text "<p>one</p><p>two</p>") "one\n\ntwo")
   (check-equal? (html->text "line<br>break") "line\nbreak")
   (check-equal? (html->text "x&nbsp;&hellip;y") "x …y"))
+
+;; ---- fetch-topic-all ------------------------------------------------------------
+;; The whole thread: the head comes from the cached /t/<id>.json, the rest
+;; from post_ids[] batches that must carry every remaining id. A loopback
+;; forum plays both endpoints and records each request line.
+
+(require racket/file
+         racket/string
+         racket/tcp
+         (file "../app/core/paths.rkt")
+         (only-in "../app/core/cache.rkt" current-cache-ttl-seconds))
+
+(define (read-request in)
+  (define request-line (read-line in 'any))
+  (let loop ()
+    (define line (read-line in 'any))
+    (unless (or (eof-object? line) (string=? line ""))
+      (loop)))
+  request-line)
+
+;; accepts exactly one connection per response body, in order; each
+;; request line is collected into the returned box (newest first)
+(define (serve-jsons! listener responses)
+  (define requests (box (list)))
+  (define server
+    (thread
+     (lambda ()
+       (for ([body (in-list responses)])
+         (define-values (in out) (tcp-accept listener))
+         (set-box! requests (cons (read-request in) (unbox requests)))
+         (display
+          (format "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ~a\r\n\r\n~a"
+                  (bytes-length (string->bytes/utf-8 body)) body)
+          out)
+         (close-input-port in)
+         (close-output-port out))
+       (tcp-close listener)))
+    )
+  (values server requests))
+
+(define (post-json id number author)
+  (format "{\"id\":~a,\"username\":\"~a\",\"cooked\":\"<p>post ~a</p>\",\"post_number\":~a,\"actions_summary\":[]}"
+          id author id number))
+
+(test-case "fetch-topic-all: batches the stream tail into post_ids[] calls"
+  (define (open-loopback-listener)
+    (let loop ([tries 20])
+      (define p (+ 20000 (random 40000)))
+      (with-handlers ([exn:fail?
+                       (lambda (_)
+                         (when (zero? tries) (error 'discourse-test "no free port"))
+                         (loop (sub1 tries)))])
+        (values (tcp-listen p 4 #f "127.0.0.1") p))))
+  (define-values (listener port) (open-loopback-listener))
+  (define head
+    (format "{\"id\":4416,\"title\":\"Long thread\",\"posts_count\":5,\"post_stream\":{\"posts\":[~a,~a],\"stream\":[11,12,13,14,15]}}"
+            (post-json 11 1 "alice") (post-json 12 2 "bob")))
+  (define batch-1
+    (format "{\"post_stream\":{\"posts\":[~a,~a]}}"
+            (post-json 13 3 "carol") (post-json 14 4 "dave")))
+  (define batch-2 (format "{\"post_stream\":{\"posts\":[~a]}}" (post-json 15 5 "erin")))
+  (define-values (server requests)
+    (serve-jsons! listener (list head batch-1 batch-2)))
+  (define-values (topic posts)
+    (parameterize ([current-forum-base-url (format "http://127.0.0.1:~a" port)]
+                   [current-data-dir (make-temporary-file "threadly-all-~a" 'directory)]
+                   [current-cache-ttl-seconds 300]
+                   [fetch-topic-all-batch-size 2])
+      (fetch-topic-all 4416)))
+  (sync/timeout 5 server)
+
+  (check-equal? (topic-summary-posts-count topic) 5)
+  (check-equal? (map forum-post-post-number posts) (list 1 2 3 4 5)
+                "stream order preserved across the batches")
+  (check-equal? (map forum-post-id posts) (list 11 12 13 14 15))
+
+  (define lines (reverse (unbox requests)))
+  (check-equal? (length lines) 3 "one head fetch plus two batches of ≤2")
+  (check-true (string-contains? (first lines) "GET /t/4416.json"))
+  (check-true (string-contains? (second lines)
+                                "GET /t/4416/posts.json?post_ids[]=13&post_ids[]=14")
+              (string-append "first batch carries two ids; got: " (second lines)))
+  (check-true (string-contains? (third lines)
+                                "GET /t/4416/posts.json?post_ids[]=15")
+              "second batch carries the remainder"))

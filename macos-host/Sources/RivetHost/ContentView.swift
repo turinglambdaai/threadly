@@ -552,6 +552,7 @@ private struct DetailView: View {
                     document: ThreadWebView.document(
                         title: topic.title,
                         posts: store.posts,
+                        postsTotal: store.postsTotal,
                         signedIn: store.signedInUser != nil
                     ),
                     store: store
@@ -599,6 +600,7 @@ struct ThreadWebView: NSViewRepresentable {
         var lastLoaded: String?
         weak var view: WKWebView?
         var store: ThreadlyStore?
+        var loadAllInFlight = false
 
         /// Links should open in the user's browser, not navigate the reader.
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
@@ -618,6 +620,10 @@ struct ThreadWebView: NSViewRepresentable {
             Task { @MainActor in
                 guard message.name == "threadly",
                       let text = message.body as? String else { return }
+                if text == "loadall:" {
+                    self.loadWholeThread()
+                    return
+                }
                 // the button's own class is the direction: a click on a
                 // liked post asks for unlike
                 let requested: (liked: Bool, postId: Int?)
@@ -642,6 +648,29 @@ struct ThreadWebView: NSViewRepresentable {
                 }
             }
         }
+
+        /// Fetches every post of the open thread and appends the ones the
+        /// page has not rendered yet. The page keeps its scroll because
+        /// only the tail moves; the store's published posts stay as they
+        /// were on purpose.
+        @MainActor
+        func loadWholeThread() {
+            guard !loadAllInFlight, let store else { return }
+            loadAllInFlight = true
+            Task { @MainActor in
+                defer { self.loadAllInFlight = false }
+                guard let all = await store.fetchAllPosts() else { return }
+                let shown = store.posts.count
+                let tail = all.dropFirst(shown)
+                guard !tail.isEmpty else { return }
+                let signedIn = store.signedInUser != nil
+                let html = tail.map { ThreadWebView.section($0, signedIn: signedIn) }
+                    .joined(separator: "\n")
+                self.view?.evaluateJavaScript(
+                    "threadlyAppendPosts(\(ThreadWebView.jsString(html)))",
+                    completionHandler: nil)
+            }
+        }
     }
 
     /// The forum's cooked HTML is already sanitized server-side; this only
@@ -649,35 +678,19 @@ struct ThreadWebView: NSViewRepresentable {
     /// stylesheet that follows the system appearance. A 680px column keeps
     /// long paragraphs readable; avatars give each post a face. Signed in,
     /// every post grows a like button wired to the script-message bridge.
-    static func document(title: String, posts: [PostRow], signedIn: Bool = false) -> String {
-        let body = posts.map { post -> String in
-            let avatar = post.avatarURL.isEmpty
-                ? ""
-                : "<img class=\"avatar\" src=\"\(escape(post.avatarURL))\" onerror=\"this.style.display='none'\">"
-            var like = ""
-            if signedIn && post.postId > 0 {
-                // the forum's own like state: filled heart + count up front
-                let heart = post.liked ? "♥" : "♡"
-                let count = post.likeCount > 0
-                    ? "<span class=\"count\">\(post.likeCount)</span>" : ""
-                let likedClass = post.liked ? " class=\"liked\"" : ""
-                like = "<button\(likedClass) class=\"like\" id=\"like-\(post.postId)\" onclick=\"threadlyLike(\(post.postId))\" title=\"\(post.liked ? "Unlike this post" : "Like this post")\">\(heart)\(count)</button>"
-            } else if post.likeCount > 0 {
-                like = "<span class=\"count\">\(post.likeCount) ♥</span>"
-            }
-            let meta = """
-            <div class="meta">\(avatar)\
-            <span class="author">\(escape(post.author))</span>\
-            <span class="dot">·</span>\
-            <span>#\(post.number)</span>\
-            <span class="dot">·</span>\
-            <span class="date">\(escape(formatDate(post.createdAt)))</span>\
-            \(like)
-            </div>
+    /// When the thread continues past these posts, a bar under the title
+    /// loads the whole thread in place (the tail is appended, so the
+    /// scroll position survives).
+    static func document(title: String, posts: [PostRow], postsTotal: Int = 0,
+                         signedIn: Bool = false) -> String {
+        let body = posts.map { section($0, signedIn: signedIn) }.joined(separator: "\n")
+        let truncated = postsTotal > posts.count
+            ? """
+            <div class="morebar" id="threadly-morebar">Showing \(posts.count) of \(postsTotal) posts \
+            <button onclick="threadlyLoadAll()">Load all</button></div>
+            <div id="threadly-more"></div>
             """
-            return "<section class=\"post\">\(meta)\(post.html)</section>"
-        }.joined(separator: "\n")
-
+            : ""
         return """
         <!doctype html>
         <html><head><meta charset="utf-8"><style>
@@ -719,6 +732,19 @@ struct ThreadWebView: NSViewRepresentable {
           color: rgba(128,128,128,.95);
         }
         .meta .like.liked .count { color: #E0413E; }
+        .morebar {
+          font-size: 12px; color: rgba(128,128,128,.95);
+          padding: 10px 0 2px; margin-bottom: 4px;
+          border-bottom: 1px solid rgba(128,128,128,.2);
+        }
+        .morebar button {
+          background: none; border: 1px solid rgba(193,95,60,.55);
+          border-radius: 6px; cursor: pointer;
+          color: #C15F3C; font-size: 12px;
+          padding: 3px 10px; margin-left: 4px;
+        }
+        .morebar button:hover { background: rgba(193,95,60,.12); }
+        .morebar button:disabled { opacity: .35; cursor: default; }
         h1,h2,h3 { line-height: 1.3; }
         pre, code {
           font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -744,7 +770,7 @@ struct ThreadWebView: NSViewRepresentable {
         aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0;
           padding: 6px 12px; background: rgba(128,128,128,.08); border-radius: 6px; }
         </style></head>
-        <body>\(body)
+        <body>\(truncated)\(body)
         <script>
         function threadlyLike(id) {
           var b = document.getElementById('like-' + id);
@@ -774,8 +800,57 @@ struct ThreadWebView: NSViewRepresentable {
           b.innerHTML = (liked ? '\\u2665' : '\\u2661') +
             (count > 0 ? '<span class="count">' + count + '</span>' : '');
         }
+        function threadlyLoadAll() {
+          var b = document.querySelector('#threadly-morebar button');
+          if (b) b.disabled = true;
+          window.webkit.messageHandlers.threadly.postMessage("loadall:");
+        }
+        // The tail arrives as one string of <section> posts; the mount
+        // div is swapped for it so the scroll position survives.
+        function threadlyAppendPosts(html) {
+          var m = document.getElementById('threadly-more');
+          if (m) m.outerHTML = html;
+          var bar = document.getElementById('threadly-morebar');
+          if (bar) bar.remove();
+        }
         </script></body></html>
         """
+    }
+
+    /// One post: avatar + author line + like button + the forum's cooked
+    /// HTML. Shared by the initial document and the "load all" tail.
+    static func section(_ post: PostRow, signedIn: Bool) -> String {
+        let avatar = post.avatarURL.isEmpty
+            ? ""
+            : "<img class=\"avatar\" src=\"\(escape(post.avatarURL))\" onerror=\"this.style.display='none'\">"
+        var like = ""
+        if signedIn && post.postId > 0 {
+            // the forum's own like state: filled heart + count up front
+            let heart = post.liked ? "♥" : "♡"
+            let count = post.likeCount > 0
+                ? "<span class=\"count\">\(post.likeCount)</span>" : ""
+            let likedClass = post.liked ? " class=\"liked\"" : ""
+            like = "<button\(likedClass) class=\"like\" id=\"like-\(post.postId)\" onclick=\"threadlyLike(\(post.postId))\" title=\"\(post.liked ? "Unlike this post" : "Like this post")\">\(heart)\(count)</button>"
+        } else if post.likeCount > 0 {
+            like = "<span class=\"count\">\(post.likeCount) ♥</span>"
+        }
+        let meta = """
+        <div class="meta">\(avatar)\
+        <span class="author">\(escape(post.author))</span>\
+        <span class="dot">·</span>\
+        <span>#\(post.number)</span>\
+        <span class="dot">·</span>\
+        <span class="date">\(escape(formatDate(post.createdAt)))</span>\
+        \(like)
+        </div>
+        """
+        return "<section class=\"post\">\(meta)\(post.html)</section>"
+    }
+
+    /// The tail travels as a JSON string literal — data for the page's
+    /// JS, never markup assembled by concatenation.
+    static func jsString(_ s: String) -> String {
+        String(decoding: try! JSONEncoder().encode(s), as: UTF8.self)
     }
 
     private static func escape(_ s: String) -> String {

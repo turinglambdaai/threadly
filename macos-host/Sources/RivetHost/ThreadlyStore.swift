@@ -68,6 +68,9 @@ final class ThreadlyStore: ObservableObject {
     @Published var scope: Scope = .latest
     @Published var selectedTopic: TopicRow?
     @Published var posts: [PostRow] = []
+    /// The thread's total post count from the backend rows; the reader
+    /// shows its "load all" bar while posts.count < postsTotal.
+    @Published var postsTotal = 0
     @Published var loadingPosts = false
     @Published var statusLine = ""
     @Published var signedInUser: String?
@@ -357,10 +360,28 @@ final class ThreadlyStore: ObservableObject {
         do {
             let rows = try await api.topic_open(id: String(id))
             posts = rows.compactMap(Self.post(from:))
+            postsTotal = Self.postsTotal(from: rows)
             statusLine = ""
         } catch {
             posts = []
+            postsTotal = 0
             statusLine = "Couldn't open the topic: \(error)"
+        }
+    }
+
+    /// The whole thread for the reader's "load all" bar. Deliberately
+    /// not published: the webview appends the tail in place, and a posts
+    /// update would reload the document and throw the scroll away.
+    /// Returns every post; the caller drops the ones already rendered.
+    func fetchAllPosts() async -> [PostRow]? {
+        guard let id = selectedTopic?.id, let api else { return nil }
+        do {
+            let rows = try await api.topic_posts_all(id: String(id))
+            postsTotal = Self.postsTotal(from: rows)
+            return rows.compactMap(Self.post(from:))
+        } catch {
+            statusLine = "Couldn't load the whole thread: \(error)"
+            return nil
         }
     }
 
@@ -412,7 +433,7 @@ final class ThreadlyStore: ObservableObject {
 
     private static func post(from row: [String]) -> PostRow? {
         // topic-post row = (author avatar-url cooked-html created-at
-        //                   post-number post-id like-count liked)
+        //                   post-number post-id like-count liked posts-total)
         guard row.count >= 5 else { return nil }
         return PostRow(
             number: Int(row[4]) ?? 0,
@@ -423,6 +444,10 @@ final class ThreadlyStore: ObservableObject {
             postId: row.count > 5 ? Int(row[5]) ?? 0 : 0,
             likeCount: row.count > 6 ? Int(row[6]) ?? 0 : 0,
             liked: row.count > 7 && row[7] == "1")
+    }
+
+    private static func postsTotal(from rows: [[String]]) -> Int {
+        rows.first.flatMap { $0.count > 8 ? Int($0[8]) ?? 0 : 0 } ?? 0
     }
 
     private static func notification(from row: [String]) -> NotificationRow {

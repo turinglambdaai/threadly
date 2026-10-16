@@ -100,6 +100,10 @@ struct AppState {
   // reader's current topic is what the composer targets.
   std::string signed_in_user;
   std::int64_t open_topic_id{0};
+  // How many posts the reader page has rendered; the "load all" tail
+  // starts there. The flag keeps a second click from double-loading.
+  std::size_t reader_shown{0};
+  std::atomic<bool> load_all_in_flight{false};
 };
 
 AppState g_state;
@@ -198,47 +202,94 @@ Category category_for(std::int64_t id) {
 // stylesheet, light and dark. Same 680px column and terracotta accents as
 // the macOS shell. Signed in, every post grows a like button wired to the
 // script-message bridge ("like:<id>" / "unlike:<id>" out,
-// threadlyLikeSettled() back in).
+// threadlyLikeSettled() back in). When the thread continues past these
+// posts (the rows' last cell carries the total), a bar loads the whole
+// thread in place — the tail is appended, so the scroll survives.
+
+// One post from a topic-post row: author line + like button + cooked HTML.
+// Shared by the initial document and the "load all" tail.
+std::string post_section(std::vector<std::string> const& row,
+                         bool const signed_in) {
+  if (row.size() < 5) return "";
+  // topic-post row = (author avatar-url cooked-html created-at
+  //                   post-number post-id like-count liked posts-total)
+  std::string const& author = row[0];
+  std::string const& avatar = row[1];
+  std::string const& cooked = row[2];
+  std::string const date = compact_date(row[3]);
+  std::string like;
+  if (signed_in && row.size() >= 6) {
+    // topic-post rows carry the forum's like state (count + acted flag)
+    bool const liked = row.size() >= 8 && row[7] == "1";
+    std::string const count =
+        row.size() >= 7 && row[6] != "0"
+            ? "<span class=\"count\">" + row[6] + "</span>"
+            : "";
+    like = "<button class=\"like" + std::string(liked ? " liked" : "") +
+           "\" id=\"like-" + row[5] + "\" onclick=\"threadlyLike(" +
+           row[5] + ")\" title=\"" +
+           (liked ? "Unlike this post" : "Like this post") + "\">" +
+           (liked ? "&#9829;" : "&#9825;") + count + "</button>";
+  } else if (row.size() >= 7 && row[6] != "0") {
+    like = "<span class=\"count\">" + row[6] + " &#9829;</span>";
+  }
+  std::string out = "<section class=\"post\"><div class=\"meta\">";
+  if (!avatar.empty()) {
+    out += "<img class=\"avatar\" src=\"" + escape_html(avatar) +
+           "\" onerror=\"this.style.display='none'\">";
+  }
+  out += "<span class=\"author\">" + escape_html(author) + "</span>";
+  out += "<span class=\"dot\">·</span><span>#" + row[4] + "</span>";
+  if (!date.empty()) {
+    out += "<span class=\"dot\">·</span><span>" + escape_html(date) +
+           "</span>";
+  }
+  out += like;
+  out += "</div>" + cooked + "</section>";
+  return out;
+}
+
+// A JSON string literal: the appended tail travels as data for the
+// page's JS, never as markup concatenated into a script.
+std::string js_string_literal(std::string const& text) {
+  std::string out = "\"";
+  for (unsigned char const c : text) {
+    switch (c) {
+      case '"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (c < 0x20) {
+          char buf[7];
+          std::snprintf(buf, sizeof buf, "\\u%04x", c);
+          out += buf;
+        } else {
+          out += static_cast<char>(c);
+        }
+    }
+  }
+  out += '"';
+  return out;
+}
+
 std::string reader_document(Rows const& posts, bool const signed_in) {
   std::string body;
   for (auto const& row : posts) {
-    if (row.size() < 5) continue;
-    // topic-post row = (author avatar-url cooked-html created-at
-    //                   post-number post-id)
-    std::string const& author = row[0];
-    std::string const& avatar = row[1];
-    std::string const& cooked = row[2];
-    std::string const date = compact_date(row[3]);
-    std::string like;
-    if (signed_in && row.size() >= 6) {
-      // topic-post rows carry the forum's like state (count + acted flag)
-      bool const liked = row.size() >= 8 && row[7] == "1";
-      std::string const count =
-          row.size() >= 7 && row[6] != "0"
-              ? "<span class=\"count\">" + row[6] + "</span>"
-              : "";
-      like = "<button class=\"like" + std::string(liked ? " liked" : "") +
-             "\" id=\"like-" + row[5] + "\" onclick=\"threadlyLike(" +
-             row[5] + ")\" title=\"" +
-             (liked ? "Unlike this post" : "Like this post") + "\">" +
-             (liked ? "&#9829;" : "&#9825;") + count + "</button>";
-    } else if (row.size() >= 7 && row[6] != "0") {
-      like = "<span class=\"count\">" + row[6] + " &#9829;</span>";
-    }
-    body += "<section class=\"post\"><div class=\"meta\">";
-    if (!avatar.empty()) {
-      body += "<img class=\"avatar\" src=\"" + escape_html(avatar) +
-              "\" onerror=\"this.style.display='none'\">";
-    }
-    body += "<span class=\"author\">" + escape_html(author) + "</span>";
-    body += "<span class=\"dot\">·</span><span>#" + row[4] + "</span>";
-    if (!date.empty()) {
-      body += "<span class=\"dot\">·</span><span>" + escape_html(date) +
-              "</span>";
-    }
-    body += like;
-    body += "</div>" + cooked + "</section>";
+    body += post_section(row, signed_in);
+    body += "\n";
   }
+  long const total =
+      !posts.empty() && posts[0].size() >= 9 ? std::atol(posts[0][8].c_str()) : 0;
+  std::string const truncated =
+      total > static_cast<long>(posts.size())
+          ? "<div class=\"morebar\" id=\"threadly-morebar\">Showing " +
+                std::to_string(posts.size()) + " of " +
+                std::to_string(total) +
+                " posts <button onclick=\"threadlyLoadAll()\">Load all"
+                "</button></div><div id=\"threadly-more\"></div>"
+          : "";
 
   return std::string{R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><style>
@@ -275,6 +326,19 @@ body {
   color: rgba(128,128,128,.95);
 }
 .meta .like.liked .count { color: #E0413E; }
+.morebar {
+  font-size: 12px; color: rgba(128,128,128,.95);
+  padding: 10px 0 2px; margin-bottom: 4px;
+  border-bottom: 1px solid rgba(128,128,128,.2);
+}
+.morebar button {
+  background: none; border: 1px solid rgba(193,95,60,.55);
+  border-radius: 6px; cursor: pointer;
+  color: #C15F3C; font-size: 12px;
+  padding: 3px 10px; margin-left: 4px;
+}
+.morebar button:hover { background: rgba(193,95,60,.12); }
+.morebar button:disabled { opacity: .35; cursor: default; }
 h1,h2,h3 { line-height: 1.3; }
 pre, code { font-family: "Adwaita Mono", ui-monospace, Menlo, monospace; font-size: 13px; }
 code { background: rgba(128,128,128,.14); padding: 1px 5px; border-radius: 4px; }
@@ -287,7 +351,7 @@ a { color: )HTML" +
 aside.quote { border-left: 3px solid rgba(193,95,60,.55); margin: 8px 0; padding: 6px 12px; background: rgba(128,128,128,.08); border-radius: 6px; }
 </style></head>
 <body>)HTML" +
-         body + R"HTML(
+         truncated + body + R"HTML(
 <script>
 function threadlyLike(id) {
   var b = document.getElementById('like-' + id);
@@ -315,6 +379,19 @@ function threadlyLikeSettled(id, ok, liked) {
   if (count < 0) count = 0;
   b.innerHTML = (liked ? '\u2665' : '\u2661') +
     (count > 0 ? '<span class="count">' + count + '</span>' : '');
+}
+function threadlyLoadAll() {
+  var b = document.querySelector('#threadly-morebar button');
+  if (b) b.disabled = true;
+  window.webkit.messageHandlers.threadly.postMessage("loadall:");
+}
+// The tail arrives as one string of <section> posts; the mount div is
+// swapped for it so the scroll position survives.
+function threadlyAppendPosts(html) {
+  var m = document.getElementById('threadly-more');
+  if (m) m.outerHTML = html;
+  var bar = document.getElementById('threadly-morebar');
+  if (bar) bar.remove();
 }
 </script></body></html>)HTML";
 }
@@ -499,8 +576,10 @@ int on_posts_delivered(gpointer user_data) {
   std::unique_ptr<rivet_app::Result<Rows>> result(
       static_cast<rivet_app::Result<Rows>*>(user_data));
   try {
+    Rows const rows = result->get();
+    g_state.reader_shown = rows.size();
     std::string const document =
-        reader_document(result->get(), !g_state.signed_in_user.empty());
+        reader_document(rows, !g_state.signed_in_user.empty());
     webkit_web_view_load_html(g_state.web_view, document.c_str(), kForumBase);
     reader_ready();
   } catch (std::exception const& error) {
@@ -579,8 +658,52 @@ void like_post(std::int64_t const post_id, bool const like) {
   }
 }
 
+// The reader's "load all" bar: fetches every post of the open thread and
+// appends the ones the page has not rendered yet. The page keeps its
+// scroll because only the tail moves.
+int on_all_posts_delivered(gpointer user_data) {
+  std::unique_ptr<rivet_app::Result<Rows>> result(
+      static_cast<rivet_app::Result<Rows>*>(user_data));
+  g_state.load_all_in_flight.store(false, std::memory_order_release);
+  if (!g_state.shutting_down.load(std::memory_order_acquire)) {
+    try {
+      Rows const rows = result->get();
+      std::string tail;
+      for (std::size_t i = g_state.reader_shown; i < rows.size(); ++i) {
+        tail += post_section(rows[i], !g_state.signed_in_user.empty());
+        tail += "\n";
+      }
+      if (!tail.empty()) {
+        g_state.reader_shown = rows.size();
+        run_reader_js("threadlyAppendPosts(" + js_string_literal(tail) + ")");
+      }
+    } catch (std::exception const& error) {
+      status_show(std::string{"Couldn't load the whole thread: "} +
+                  error.what());
+    }
+  }
+  return G_SOURCE_REMOVE;
+}
+
+void load_all_posts() {
+  if (g_state.load_all_in_flight.load(std::memory_order_acquire) ||
+      g_state.open_topic_id == 0 || g_state.api == nullptr) {
+    return;
+  }
+  g_state.load_all_in_flight.store(true, std::memory_order_release);
+  (void)g_state.api->topic_posts_all_async(
+      std::to_string(g_state.open_topic_id),
+      [](rivet_app::Result<Rows> result) mutable {
+        g_idle_add(
+            [](gpointer user_data) -> int {
+              return on_all_posts_delivered(user_data);
+            },
+            new rivet_app::Result<Rows>(std::move(result)));
+      });
+}
+
 // The reader page posts "like:<id>" / "unlike:<id>" from the per-post
-// button.
+// button, "loadall:" from the truncation bar.
 void on_script_message(WebKitUserContentManager*, JSCValue* value, gpointer) {
   if (value == nullptr || !jsc_value_is_string(value)) return;
   char* text = jsc_value_to_string(value);
@@ -590,6 +713,8 @@ void on_script_message(WebKitUserContentManager*, JSCValue* value, gpointer) {
     like_post(std::strtoll(message.c_str() + 5, nullptr, 10), true);
   } else if (message.rfind("unlike:", 0) == 0) {
     like_post(std::strtoll(message.c_str() + 7, nullptr, 10), false);
+  } else if (message == "loadall:") {
+    load_all_posts();
   }
 }
 
