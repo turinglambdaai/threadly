@@ -275,7 +275,11 @@
                          (embedded-public-key)
                          current-update-key-id
                          (rollout-bucket)
-                         maximum-download-bytes))
+                         maximum-download-bytes
+                         ;; rivet #271: component selects feed artifacts;
+                         ;; #f = the plain whole-app artifact (legacy
+                         ;; manifests carry no component field).
+                         #f))
        ;; rivet/distribution's select-update accepts #:install-kind
        ;; ('portable 'msi 'appimage 'package-manager) to filter artifacts by
        ;; the host's install shape, but threadly cannot use it today: the
@@ -524,7 +528,11 @@
                     (embedded-public-key)
                     current-update-key-id
                     (rollout-bucket)
-                    maximum-download-bytes))
+                    maximum-download-bytes
+                    ;; rivet #271: component selects feed artifacts; #f =
+                    ;; the plain whole-app artifact (legacy manifests carry
+                    ;; no component field).
+                    #f))
   (define destination (destination-path data-dir candidate))
   (set-box! last-progress-seconds (current-seconds))
   (define worker-thread

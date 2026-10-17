@@ -23,9 +23,6 @@ struct ThreadlyApp: App {
         }
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Check for Updates…") { model.checkForUpdates(manual: true) }
-                    .keyboardShortcut("u")
-                Divider()
                 Button("Refresh") { model.store.refresh() }
                     .keyboardShortcut("r", modifiers: [.command])
             }
@@ -33,6 +30,12 @@ struct ThreadlyApp: App {
             // (version, license, site + issue links).
             CommandGroup(replacing: .appInfo) {
                 Button("About Threadly") { model.aboutVisible = true }
+            }
+            // Family menu convention: Check for Updates… lives in the App
+            // menu directly below About.
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { model.checkForUpdates(manual: true) }
+                    .keyboardShortcut("u")
             }
         }
         .windowStyle(.automatic)

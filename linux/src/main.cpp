@@ -1146,11 +1146,15 @@ void show_about_dialog() {
   gtk_window_present(GTK_WINDOW(dialog));
 }
 
-void on_about_clicked(GtkButton*, gpointer) { show_about_dialog(); }
+// Help-menu action (the retired header About icon routed to the same
+// dialog).
+void on_about_action(GSimpleAction*, GVariant*, gpointer) {
+  show_about_dialog();
+}
 
 // ---- online update flow -----------------------------------------------------
 // The backend verifies and downloads the signed artifact; this host owns
-// only the UI: one silent throttled launch check, a header "Check for
+// only the UI: one silent throttled launch check, a Help-menu "Check for
 // Updates…" entry that bypasses the throttle, a consent dialog, 400 ms
 // update-state polling, and a shape-dependent hand-off. AppImage installs
 // re-exec the swapped image on consent; deb/rpm installs get package-manager
@@ -1646,7 +1650,7 @@ void check_for_updates(bool silent) {
       });
 }
 
-void on_check_updates_clicked(GtkButton*, gpointer) {
+void on_check_updates_action(GSimpleAction*, GVariant*, gpointer) {
   check_for_updates(/*silent=*/false);
 }
 
@@ -2018,11 +2022,17 @@ GtkWidget* build_sidebar() {
   gtk_widget_set_sensitive(translate, FALSE);
   auto* refresh = gtk_button_new_from_icon_name("view-refresh-symbolic");
   gtk_widget_set_tooltip_text(refresh, "Refresh");
-  auto* check_updates =
-      gtk_button_new_from_icon_name("system-software-update-symbolic");
-  gtk_widget_set_tooltip_text(check_updates, "Check for Updates…");
-  auto* about = gtk_button_new_from_icon_name("help-about-symbolic");
-  gtk_widget_set_tooltip_text(about, "About Threadly");
+  // Family menu convention: Check for Updates… and About live together in
+  // the Help menu, not as always-visible header icons (low-frequency
+  // actions must not take up permanent header space).
+  auto* help_menu = g_menu_new();
+  g_menu_append(help_menu, "Check for Updates…", "win.check-updates");
+  g_menu_append(help_menu, "About Threadly", "win.about");
+  auto* help = gtk_menu_button_new();
+  gtk_menu_button_set_icon_name(GTK_MENU_BUTTON(help), "open-menu-symbolic");
+  gtk_menu_button_set_menu_model(GTK_MENU_BUTTON(help), G_MENU_MODEL(help_menu));
+  gtk_widget_set_tooltip_text(help, "Help");
+  g_object_unref(help_menu);
   gtk_box_append(GTK_BOX(header), back);
   gtk_box_append(GTK_BOX(header), heading);
   gtk_box_append(GTK_BOX(header), summarize);
@@ -2030,8 +2040,7 @@ GtkWidget* build_sidebar() {
   gtk_box_append(GTK_BOX(header), reply);
   gtk_box_append(GTK_BOX(header), account);
   gtk_box_append(GTK_BOX(header), refresh);
-  gtk_box_append(GTK_BOX(header), check_updates);
-  gtk_box_append(GTK_BOX(header), about);
+  gtk_box_append(GTK_BOX(header), help);
   g_state.back_button = GTK_BUTTON(back);
   g_state.refresh_button = GTK_BUTTON(refresh);
   g_state.reply_button = GTK_BUTTON(reply);
@@ -2044,9 +2053,6 @@ GtkWidget* build_sidebar() {
                    nullptr);
   g_signal_connect(translate, "clicked", G_CALLBACK(on_translate_clicked),
                    nullptr);
-  g_signal_connect(check_updates, "clicked",
-                   G_CALLBACK(on_check_updates_clicked), nullptr);
-  g_signal_connect(about, "clicked", G_CALLBACK(on_about_clicked), nullptr);
 
   // Discourse category navigation: a drop-down whose index 0 is Latest
   // and whose remaining entries are the forum's categories in order.
@@ -2101,6 +2107,19 @@ void on_activate(GtkApplication* app, gpointer) {
   auto* window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "Threadly");
   gtk_window_set_default_size(GTK_WINDOW(window), 1100, 720);
+
+  // Help-menu actions (backed by the menu button built in build_sidebar).
+  auto* check_updates_action = g_simple_action_new("check-updates", nullptr);
+  g_signal_connect(check_updates_action, "activate",
+                   G_CALLBACK(on_check_updates_action), nullptr);
+  g_action_map_add_action(G_ACTION_MAP(window),
+                          G_ACTION(check_updates_action));
+  g_object_unref(check_updates_action);
+  auto* about_action = g_simple_action_new("about", nullptr);
+  g_signal_connect(about_action, "activate", G_CALLBACK(on_about_action),
+                   nullptr);
+  g_action_map_add_action(G_ACTION_MAP(window), G_ACTION(about_action));
+  g_object_unref(about_action);
 
   auto* pane = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_paned_set_position(GTK_PANED(pane), 340);

@@ -33,7 +33,6 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                     <Button Grid.Column="0" x:Name="BackButton" Content="&#xE72B;" FontFamily="Segoe MDL2 Assets" Background="Transparent" Visibility="Collapsed" ToolTipService.ToolTip="Back to latest" Click="Back_Click" />
                     <TextBlock Grid.Column="1" x:Name="SidebarTitle" Text="Latest" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -41,9 +40,20 @@
                     <Button Grid.Column="3" x:Name="TranslateButton" Content="Translate" Background="Transparent" Padding="6,4" IsEnabled="False" ToolTipService.ToolTip="AI translation of this thread" Click="Translate_Click" />
                     <Button Grid.Column="4" x:Name="ReplyButton" Content="&#xE97A;" FontFamily="Segoe MDL2 Assets" Background="Transparent" IsEnabled="False" ToolTipService.ToolTip="Reply to this topic" Click="Reply_Click" />
                     <Button Grid.Column="5" x:Name="AccountButton" Content="&#xE77B;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="Sign in" Click="Account_Click" />
-                    <Button Grid.Column="6" Content="&#xE895;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="Check for updates" Click="CheckForUpdates_Click" />
-                    <Button Grid.Column="7" Content="&#xE72C;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="Refresh" Click="Refresh_Click" />
-                    <Button Grid.Column="8" Content="&#xE897;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="About Threadly" Click="OnAbout" />
+                    <Button Grid.Column="6" Content="&#xE72C;" FontFamily="Segoe MDL2 Assets" Background="Transparent" ToolTipService.ToolTip="Refresh" Click="Refresh_Click" />
+                    <Button Grid.Column="7" Content="Help" Background="Transparent" Padding="8,4" ToolTipService.ToolTip="Help">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="Check for Updates…" Click="CheckForUpdates_Click">
+                                    <MenuFlyoutItem.KeyboardAccelerators>
+                                        <KeyboardAccelerator Modifiers="Control" Key="U" />
+                                    </MenuFlyoutItem.KeyboardAccelerators>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="About Threadly" Click="OnAbout" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                 </Grid>
 
                 <ComboBox Grid.Row="1" x:Name="CategoryPicker" HorizontalAlignment="Stretch" SelectionChanged="CategoryPicker_SelectionChanged" IsEnabled="False" PlaceholderText="Latest" />

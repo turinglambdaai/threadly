@@ -103,7 +103,9 @@
                           artifact-url
                           payload-sha256
                           (bytes-length payload)
-                          'zip '()))))
+                          'zip '()
+                          ;; rivet #271: component #f = the plain whole-app artifact.
+                          #f))))
 
 (test-case "signed manifest verifies, a wrong key-id fails closed"
   (define wrapped (open-output-bytes))
@@ -123,7 +125,9 @@
   (define config
     (updater-config upd:current-update-application-id "0.0.1" 'stable
                     (upd:platform-symbol) (upd:architecture-symbol)
-                    pub "threadly-test" 42 download-limit))
+                    pub "threadly-test" 42 download-limit
+                    ;; rivet #271: component #f = the plain whole-app artifact.
+                    #f))
   (define candidate
     (select-update config
                    (test-manifest "https://dl.example/threadly-9.9.9.zip")))
@@ -181,7 +185,9 @@
   (define config
     (updater-config upd:current-update-application-id "0.1.0" 'stable
                     (upd:platform-symbol) (upd:architecture-symbol)
-                    pub "threadly-test" 0 download-limit))
+                    pub "threadly-test" 0 download-limit
+                    ;; rivet #271: component #f = the plain whole-app artifact.
+                    #f))
   (define candidate
     (select-update config
                    (test-manifest
@@ -306,7 +312,9 @@
   (define config
     (updater-config upd:current-update-application-id "0.1.0" 'stable
                     (upd:platform-symbol) (upd:architecture-symbol)
-                    pub "threadly-test" 0 download-limit))
+                    pub "threadly-test" 0 download-limit
+                    ;; rivet #271: component #f = the plain whole-app artifact.
+                    #f))
   (define candidate (select-update config (test-manifest feed-url)))
   (check-true (update-candidate? candidate))
 

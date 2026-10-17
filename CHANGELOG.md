@@ -5,6 +5,13 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+### Changed
+- "Check for Updates…" moved next to "About" on every platform per the
+  family menu convention: it now lives in the App menu directly below
+  About on macOS, and in a Help menu (Ctrl+U accelerator) on Windows and
+  Linux — replacing the always-visible header icon buttons, which were
+  retired as low-frequency actions.
+
 ## 0.13.0 - 2026-10-16
 
 Three threads converge here: likes become toggleable, the installers
