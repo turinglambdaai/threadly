@@ -16,7 +16,7 @@ env:
   # install step below references this so a bump is one edit. Pinned to a
   # rivet main revision (no tag yet) for the branded installer experience:
   # dmg-background layout, WiX wizard bitmaps, deb desktop refresh.
-  RIVET_PIN: cb97b88ad27dc604ef235f47e8e8c040ffd0670b
+  RIVET_PIN: c7f9881d25acea50babd51a2a48672ce0cf99b1f
 
 jobs:
   macos:

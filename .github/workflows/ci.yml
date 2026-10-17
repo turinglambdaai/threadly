@@ -12,7 +12,7 @@ concurrency:
 env:
   # Single source of truth for the rivet pin (same value as release.yml);
   # every rivet checkout below references this so a bump is one edit.
-  RIVET_PIN: cb97b88ad27dc604ef235f47e8e8c040ffd0670b
+  RIVET_PIN: c7f9881d25acea50babd51a2a48672ce0cf99b1f
 
 jobs:
   backend:
