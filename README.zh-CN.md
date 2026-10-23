@@ -43,15 +43,14 @@ Threadly 就来做这个桌面客户端,而且按 Racket 社区做事的方式:�
 ## 状态与路线图
 
 今天已可用:Discourse 引擎(最新主题/读帖/搜索/分类)、带离线兜底的 TTL
-磁盘缓存、终端 CLI、macOS SwiftUI 壳。
+磁盘缓存、终端 CLI 和 macOS / Windows / Linux 原生宿主。登录写操作和 BYOK AI
+已有实现；打包工作流证据仍是独立交付门禁。
 
 - [x] M0 —— Discourse 引擎、磁盘缓存、CLI、macOS SwiftUI 壳
 - [x] M1 —— Windows 与 Linux 原生壳
-- [ ] M2 —— 登录态:user API key 流、回帖、点赞、通知
-- [ ] M3 —— 阅读增值:帖子摘要、翻译
-- [ ] M4 —— 移动端:Android 壳(Rivet Kotlin 平台)与 iOS/iPadOS 壳
-      (Rivet portable Swift 层),对齐家族全平台标准;watchOS 通知伴机
-      作为 M4 尾段,骑在手机宿主上走 Rivet 的 typed WatchConnectivity 层
+- [x] M2 —— 登录态:user API key 流、回帖、点赞、通知
+- [x] M3 —— 阅读增值:帖子摘要、翻译
+- [ ] 移动端暂缓，仅在用户需求、维护能力与 Rivet 真机交付证据具备后评估，不作当前承诺。
 
 ## 从源码构建
 
@@ -71,3 +70,7 @@ Racket 引擎 + 各平台第一方原生 UI。macOS 壳在 `macos-host/`,通过
 ## 许可证
 
 [AGPL-3.0](LICENSE)
+
+## 反馈与诊断
+
+问题和建议请使用 [GitHub Issues](https://github.com/turinglambdaai/threadly/issues)，附版本、系统/架构和复现步骤。分享前先检查并脱敏诊断；不要公开 API key、授权凭据、密钥库或私有文档。安全敏感问题优先按 SECURITY.md 联系；未提供私密渠道时，先请求私下联系方式，不在公开 issue 中披露敏感细节。此入口不会自动上传数据。

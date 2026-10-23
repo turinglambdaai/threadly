@@ -44,17 +44,18 @@ plus `.json`). No account, no scraping, no private endpoints.
 2. **A good citizen.** Public endpoints only, every response cached on
    disk with a TTL, requests carry a identifying User-Agent, and a 429 is
    honored rather than retried into the ground.
-3. **Read-only today.** No credentials live in or near the app. Signing
-   in (via Discourse's user API key flow) is a later milestone, not a
-   hidden feature.
+3. **Anonymous reading first.** Public reading needs no account. Signed-in
+   actions use Discourse's user API key flow; credentials stay local and must
+   never appear in caches, logs or feedback.
 4. **Long-form first.** The reading experience is the product; chrome is
    the thing being removed.
 
 ## Status & roadmap
 
 Working today: the Discourse engine (latest / topic / search / categories),
-the TTL disk cache with offline fallback, a terminal CLI, and the macOS
-SwiftUI shell.
+the TTL disk cache with offline fallback, a terminal CLI, and native hosts
+for macOS, Windows and Linux. Signed-in actions and BYOK AI are implemented;
+packaged workflow evidence remains a separate delivery gate.
 
 - [x] M0 — Discourse engine, disk cache, CLI, macOS SwiftUI shell
 - [x] M1 — Windows and Linux native hosts
@@ -63,11 +64,8 @@ SwiftUI shell.
       three desktop platforms
 - [x] M3 — reading value-add: AI thread summaries and translation over
       any OpenAI-compatible endpoint (configurable via the CLI)
-- [ ] M4 — mobile: Android host (Rivet's Kotlin platform) and iOS/iPadOS
-      host (Rivet's portable Swift layer), matching the family's
-      full-platform scope; a watchOS notification companion follows as
-      the tail of M4, riding the phone host over Rivet's typed
-      WatchConnectivity layer. Gated on Rivet's mobile platforms.
+- [ ] Mobile is a deferred option, gated on user demand, maintenance capacity
+      and Rivet device-delivery evidence; it is not a current commitment.
 
 ## AI features (M3)
 
@@ -104,3 +102,11 @@ shell lives in `macos-host/` and builds through `raco rivet build`.
 ## License
 
 [AGPL-3.0](LICENSE)
+
+## Delivery priorities (2026-10-23)
+
+The current product review issue linked from AGENTS owns the next bounded slice and its acceptance scenarios. Follow the existing product specification and the [family delivery standard](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/PRODUCT-STANDARD.md). Hardware, native-platform and live-payment gates remain explicit; this documentation update does not claim they passed.
+
+## Feedback and diagnostics
+
+Report reproducible bugs and feature requests through [GitHub Issues](https://github.com/turinglambdaai/threadly/issues). Include the release, OS/architecture and steps; inspect and redact diagnostics before sharing. Do not post API keys, license files, vault contents or private documents. For sensitive security reports, follow SECURITY.md when present; otherwise request a private contact route without disclosing sensitive details. Nothing is uploaded automatically.

@@ -7,8 +7,8 @@
 Threadly 是 Racket 社区论坛(racket.discourse.group,Discourse 架构)的
 原生客户端:浏览最新主题、读长帖、全文搜索。论坛是 Racket 语言设计讨论
 与生态动态的主场,Threadly 给它一个配得上内容质量的阅读器。**全平台
-产品,与 Taskly 同标:桌面三平台(macOS/Windows/Linux)先行,移动端
-iOS/iPadOS/Android 后期必须落地。**技术形态遵循
+产品,与 Taskly 同标:桌面三平台(macOS/Windows/Linux)为当前维护范围；移动端
+iOS/iPadOS/Android 只保留按需求评估的方向，不是当前交付承诺。**技术形态遵循
 [Rivet](https://github.com/turinglambdaai/rivet) 线:**Racket 引擎 +
 各平台第一方原生 UI**。产品灵魂是**阅读体验**——壳的每一像素都要按这个
 标准做(对标线见 fulcrum 的 Raycast 对标)。
@@ -25,8 +25,8 @@ iOS/iPadOS/Android 后期必须落地。**技术形态遵循
 
 ## 硬边界(本仓库存在的合法性根基,任何改动不得越过)
 
-1. **只读优先,凭据零入库**:当前只用匿名公开 JSON API;登录写操作
-   (Discourse user API key 流)是独立里程碑,任何 token/cookie/密码不得
+1. **只读优先,凭据零入库**:匿名浏览使用公开 JSON API；登录写操作
+   使用已实现的 Discourse user API key 流,任何 token/cookie/密码不得
    写进仓库或进序列化日志。
 2. **做好公民**:只打公开端点;所有响应走磁盘缓存(默认 TTL 300s);
    请求带身份标识 UA;429 必须如实上抛退避,禁止批量爬取(翻页有上限)。
@@ -76,8 +76,8 @@ pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生�
   `UPDATE_ED25519_PRIVATE_KEY` PEM 形态;散件即到即收立删)。轮换规则见
   Sync/Keys/AGENTS.md。
 - 产品主页 `site/` → threadly.jrtx.site(Pages workflow 部署,Pages 已
-  启用 workflow 构建型;DNS CNAME 记录由用户添加)。骨架沿用 keepsake
-  站点:双语 i18n 默认中文、共享暖色变量+完整暗色主题、零依赖、系统
+  启用 workflow 构建型;DNS CNAME 记录由用户添加)。产品站采用家族静态
+  站点约定:双语 i18n 默认中文、共享暖色变量+完整暗色主题、零依赖、系统
   字体栈(家族规范:禁 Google Fonts)。
 
 ## 坑(已踩过)
@@ -125,3 +125,10 @@ pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生�
 - 轨道与授权：维护模式（免费保活，不再新增投入）；授权形态：AGPL-3.0；商业归属：永久免费——Racket 社区工具，远期可移交社区。
 - 组合归属唯一权威：[PORTFOLIO.md](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)（turinglambdaai.github.io 仓库）。改归属/授权先改权威档，再同步本节。
 - 纪律：价格只进本仓 `PRICING.md`，且收费开始时才发布；README 与产品站不做价格预告。
+
+## 产品交付与下一步（2026-10-23）
+
+- 家族[交付标准](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/PRODUCT-STANDARD.md)与[组合策略](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)是共用政策；本仓具体行为以 `README.md` 为准，不复制五库依赖图。
+- 当前执行入口：[产品审查 issue](https://github.com/turinglambdaai/threadly/issues/1)。维护模式：先对齐登录/回帖/AI 与密钥存储的真实状态，补最小 packaged 阅读/搜索/反馈证据。移动端仅在实际需求与维护能力具备后评估。
+- 开工先检查干净工作树与远端，以 fast-forward-only 更新并记录 SHA；共享文件一次一个写入者，保留其他 checkout 的未提交工作。
+- 每次只完成一个可验收切片，记录 owned files、依赖 pin、命令/平台/产物证据和回滚。已实现、已发布、实机验收分别陈述；不修改 requirements 或复用旧证据来制造通过。
