@@ -50,6 +50,8 @@ var _hmt = _hmt || [];
   s.parentNode.insertBefore(hm, s);
 })();
 </script>
+<style>.lang-menu li.lang-choice{padding:0}.lang-menu .lang-choice button{display:block;width:100%;padding:8px 12px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.lang-menu .lang-choice button:focus-visible{outline:2px solid currentColor;outline-offset:-2px;border-radius:4px}</style>
+<style>.guide-status{margin:20px 0;padding:16px 20px;border:1px solid currentColor;border-radius:10px;font-size:.95rem;line-height:1.65}.guide-status p{margin:0 0 8px}.guide-status a{text-decoration:underline;text-underline-offset:4px}html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}</style>
 </head>
 <body>
 <header class="nav">
@@ -66,8 +68,8 @@ var _hmt = _hmt || [];
           <span id="current-lang-label">English</span>
         </button>
         <ul class="lang-menu">
-          <li onclick="setLanguage('en')">English</li>
-          <li onclick="setLanguage('zh')">简体中文</li>
+          <li class="lang-choice"><button type="button" onclick="setLanguage('en')">English</button></li>
+          <li class="lang-choice"><button type="button" onclick="setLanguage('zh')">简体中文</button></li>
         </ul>
       </div>
       <button class="theme-btn" id="theme-btn" aria-label="Toggle theme">◐</button>
@@ -79,6 +81,7 @@ var _hmt = _hmt || [];
   <section class="hero" style="padding-bottom:8px">
     <p class="kicker" data-i18n="kicker">使用手册</p>
     <h1 data-i18n="hero-title">五分钟读懂 Threadly。</h1>
+<aside class="guide-status"><p class="reader-en " lang="en">Free community reader in maintenance mode under AGPL-3.0. No commercial account or paid mobile offer.</p><p class="reader-zh " lang="zh">AGPL-3.0 许可的免费社区阅读器，处于维护模式；不要求商业账号，也不销售移动端。</p><a class="reader-en" lang="en" href="https://github.com/turinglambdaai/threadly/blob/main/docs/USER-GUIDE.md">Current installation, privacy and recovery</a><a class="reader-zh" lang="zh" href="https://github.com/turinglambdaai/threadly/blob/main/docs/USER-GUIDE.zh-CN.md">当前安装、隐私与恢复</a></aside>
     <p class="lede" data-i18n="hero-lede">
       安装、登录、读第一个话题；再看核心功能与常见问题。句子短，照着做即可。
     </p>

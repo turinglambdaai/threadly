@@ -3,11 +3,17 @@
 Racket 社区论坛的原生客户端——不开浏览器标签页就能浏览、阅读、全文搜索
 [racket.discourse.group](https://racket.discourse.group)。Racket 的设计讨论、
 提案与生态动态都发生在这个论坛上,Threadly 给这些长技术帖一套配得上内容
-的阅读体验:今天在桌面,接下来是 iOS、iPadOS 和 Android。
+的阅读体验:目前面向桌面；移动端暂缓。
 
 [![CI](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/threadly)](https://github.com/turinglambdaai/threadly/releases/latest) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)](https://github.com/turinglambdaai/threadly/releases/latest) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Racket](https://img.shields.io/badge/Racket-9.3-9D00FF?logo=racket&logoColor=white)
 
 [English](README.md) · **中文**
+
+## 开始使用
+
+AGPL-3.0 许可的免费社区阅读器，处于维护模式；不要求商业账号，也不销售移动端。 桌面维护范围为 macOS、Windows、Linux；移动与手表客户端尚未交付。
+
+[安装、首次使用、隐私与备份恢复](docs/USER-GUIDE.zh-CN.md) · [English](docs/USER-GUIDE.md)
 
 ## 为什么
 
@@ -70,11 +76,3 @@ Racket 引擎 + 各平台第一方原生 UI。macOS 壳在 `macos-host/`,通过
 ## 许可证
 
 [AGPL-3.0](LICENSE)
-
-## 反馈与诊断
-
-问题和建议请使用 [GitHub Issues](https://github.com/turinglambdaai/threadly/issues)，附版本、系统/架构和复现步骤。分享前先检查并脱敏诊断；不要公开 API key、授权凭据、密钥库或私有文档。安全敏感问题优先按 SECURITY.md 联系；未提供私密渠道时，先请求私下联系方式，不在公开 issue 中披露敏感细节。此入口不会自动上传数据。
-
-## 产品与收费
-
-免费社区工具；保活。首发目标、免费边界与开卖门禁见 [PRICING.md](PRICING.zh-CN.md)；当前仍在开发，没有实际用户，不表示已开售，也不因此给开发版即时加收费墙。

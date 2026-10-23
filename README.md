@@ -5,11 +5,17 @@ search [racket.discourse.group](https://racket.discourse.group) without
 opening a browser tab. The forum is where Racket's design decisions,
 proposals, and ecosystem news actually happen; Threadly gives those long
 technical threads the reading experience they deserve, on the desktop
-today and on iOS, iPadOS, and Android next.
+on macOS, Windows and Linux. Mobile is deferred.
 
 [![CI](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/threadly)](https://github.com/turinglambdaai/threadly/releases/latest) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)](https://github.com/turinglambdaai/threadly/releases/latest) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Racket](https://img.shields.io/badge/Racket-9.3-9D00FF?logo=racket&logoColor=white)
 
 **English** · [中文](README.zh-CN.md)
+
+## Start here
+
+Free community reader in maintenance mode under AGPL-3.0. No commercial account or paid mobile offer. Desktop maintenance scope: macOS, Windows and Linux. Mobile and watch clients are not current deliveries.
+
+[Installation, first use, privacy, backup and recovery](docs/USER-GUIDE.md) · [简体中文](docs/USER-GUIDE.zh-CN.md)
 
 ## Why
 
@@ -102,15 +108,3 @@ shell lives in `macos-host/` and builds through `raco rivet build`.
 ## License
 
 [AGPL-3.0](LICENSE)
-
-## Delivery priorities (2026-10-23)
-
-The current product review issue linked from AGENTS owns the next bounded slice and its acceptance scenarios. Follow the existing product specification and the [family delivery standard](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/PRODUCT-STANDARD.md). Hardware, native-platform and live-payment gates remain explicit; this documentation update does not claim they passed.
-
-## Feedback and diagnostics
-
-Report reproducible bugs and feature requests through [GitHub Issues](https://github.com/turinglambdaai/threadly/issues). Include the release, OS/architecture and steps; inspect and redact diagnostics before sharing. Do not post API keys, license files, vault contents or private documents. For sensitive security reports, follow SECURITY.md when present; otherwise request a private contact route without disclosing sensitive details. Nothing is uploaded automatically.
-
-## Product & pricing
-
-Free community tool; maintenance mode. Read the complete [English pricing and product policy](PRICING.md) or [简体中文](PRICING.zh-CN.md) for target prices, free/paid boundaries and launch gates. This is a launch design, not a live offer; this documentation does not add payment restrictions to current development builds.
