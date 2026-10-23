@@ -74,3 +74,7 @@ Racket 引擎 + 各平台第一方原生 UI。macOS 壳在 `macos-host/`,通过
 ## 反馈与诊断
 
 问题和建议请使用 [GitHub Issues](https://github.com/turinglambdaai/threadly/issues)，附版本、系统/架构和复现步骤。分享前先检查并脱敏诊断；不要公开 API key、授权凭据、密钥库或私有文档。安全敏感问题优先按 SECURITY.md 联系；未提供私密渠道时，先请求私下联系方式，不在公开 issue 中披露敏感细节。此入口不会自动上传数据。
+
+## 产品与收费
+
+免费社区工具；保活。首发目标、免费边界与开卖门禁见 [PRICING.md](PRICING.md)；当前仍在开发，没有实际用户，不表示已开售，也不因此给开发版即时加收费墙。

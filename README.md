@@ -110,3 +110,7 @@ The current product review issue linked from AGENTS owns the next bounded slice 
 ## Feedback and diagnostics
 
 Report reproducible bugs and feature requests through [GitHub Issues](https://github.com/turinglambdaai/threadly/issues). Include the release, OS/architecture and steps; inspect and redact diagnostics before sharing. Do not post API keys, license files, vault contents or private documents. For sensitive security reports, follow SECURITY.md when present; otherwise request a private contact route without disclosing sensitive details. Nothing is uploaded automatically.
+
+## Product & pricing
+
+免费社区工具；保活. Launch design, not a live offer: see [PRICING.md](PRICING.md) for prices, boundaries and release gates. Current development builds do not gain payment restrictions from this documentation change.
