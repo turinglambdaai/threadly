@@ -1,33 +1,31 @@
-# Threadly 产品与收费方案
+# Threadly product and pricing plan
 
-## 首发与执行边界
+**English** · [简体中文](PRICING.zh-CN.md)
 
-- 本方案版本 `2026-10-v2`。用户确认所有产品仍在开发、没有实际用户；本文件替代此前冲突的定价/早鸟/Pro 设想，不存在需要迁移的现有客户群。**价格是首发目标，不表示已经开卖或已完成相应功能。**
-- 只发布已交付平台的权益；新计划不改变已经发布源码的 LICENSE。开源源码的使用/修改/再分发权与官方商品、更新和服务分别说明。
-- 修复安全漏洞、读取/备份/导出自己的数据不以再次购买作为条件。模型 key、支付渠道密钥和签发私钥各有边界，不在宿主代码里直接收款或签发。
+## Launch status and implementation boundaries
 
-## 决策
+- Policy version: `2026-10-v2`, 2026-10-23. The owner confirmed that every product is still in development and has no actual users. This document replaces conflicting previous pricing, early-bird and Pro proposals; there is no existing customer cohort to migrate. **Prices are launch targets, not live offers or claims that the listed features are implemented.**
+- Entitlements cover delivered platforms only. New commercial plans do not change the LICENSE of released source. Source use, modification and redistribution rights are separate from official products, updates and services.
+- Security fixes and reading, backing up or exporting your own data must not require another purchase. BYOK keys, payment-provider secrets and issuer private keys have different owners. Native hosts do not collect payment or issue credentials directly.
 
-**免费社区工具；保活**
+## Decision
 
-首发目标：**¥0 / US$0**。人民币和美元是分别设定的地区目标价格，不是实时汇率换算。
+**Free community tool; maintenance mode**
 
-减少小产品的收费与客服复杂度，让可运行工具建立社区信任，收入投入集中到少数付费主力。
+Launch target: **¥0 / US$0**. CNY and USD are independently set regional targets, not a live exchange-rate conversion.
 
-## 免费与付费边界
+Keep billing and support complexity out of small tools. Build community trust through usable products and concentrate revenue work on a few paid products.
 
-免费 / 评估：桌面阅读、登录回帖、通知、搜索及 BYOK 摘要免费；不建托管 AI/收费墙，不将移动扩展作为必做门禁。
+## Free and paid scope
 
-付费：无付费方案；不接 Commerce，不添加 Permit 产品门禁。
+Free / evaluation: Desktop reading, signed-in replies, notifications, search and BYOK summaries are free. Add no hosted-AI service or paywall. Mobile expansion is not a required delivery gate.
 
-## 开卖前的下一步
+Paid: No paid tier is planned. Do not integrate Commerce or add Permit product gates.
 
-先完成本仓 #1 的交付/维护门禁；免费并不降低签名更新、数据恢复或隐私要求。
+## Next gate before sales
 
-执行入口：[本仓 #1](https://github.com/turinglambdaai/threadly/issues/1)。先交付这个切片，再扩展商业功能。
+Complete delivery/maintenance gates in #1 first. Free pricing does not reduce signed-update, recovery or privacy requirements.
 
-## English
+Execution entry: [issue #1](https://github.com/turinglambdaai/threadly/issues/1). Complete this bounded slice before expanding commercial features.
 
-Launch design, not a live offer. Threadly: ¥0 / US$0. No paid tier is planned. Existing source licenses remain in force.
-
-组合定位及通用边界：[PORTFOLIO](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)。
+Portfolio role and shared boundaries: [PORTFOLIO](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md).
