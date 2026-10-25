@@ -87,9 +87,12 @@ jobs:
         env:
           RIVET_ROOT: ${{ github.workspace }}/rivet
           RIVET_RACKET_FRAMEWORK_DIR: ${{ github.workspace }}/.rivet/stage/Frameworks
-        run: >
-          swift test --package-path macos-host --scratch-path .rivet/build/macos
-          -Xcc "-I${RACKET_DIR}/include"
+        run: |
+          # setup-racket does not export its install dir; derive the
+          # engine headers from the racket on PATH (<root>/include).
+          racket_root="$(dirname "$(dirname "$(command -v racket)")")"
+          swift test --package-path macos-host --scratch-path .rivet/build/macos \
+            -Xcc "-I${racket_root}/include"
       - name: Launch smoke (ad-hoc build)
         run: |
           open dist/threadly.app
