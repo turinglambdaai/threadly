@@ -72,6 +72,9 @@ final class ThreadlyStore: ObservableObject {
     /// shows its "load all" bar while posts.count < postsTotal.
     @Published var postsTotal = 0
     @Published var loadingPosts = false
+    /// Set when the open thread failed to load; the reader offers Retry /
+    /// Back instead of the "empty thread" dead end.
+    @Published var topicLoadError: String?
     @Published var statusLine = ""
     @Published var signedInUser: String?
     @Published var notifications: [NotificationRow] = []
@@ -82,6 +85,15 @@ final class ThreadlyStore: ObservableObject {
     @Published var aiPanelTitle = ""
     @Published var aiPanelText = ""
     @Published var aiLoading = false
+
+    /// Identity of the current thread load. Every posts/total/error write
+    /// is gated on this: a completion from a superseded open (user moved
+    /// on, signed out, went back to the list) is dropped, so a late
+    /// response can never present topic A's content under topic B.
+    private var topicLoadGeneration = 0
+    /// Draft replies per topic id, kept across failed loads and composer
+    /// dismissals; dropped once the reply actually posts.
+    private var replyDrafts: [Int: String] = [:]
 
     enum SignInStage: Equatable {
         case idle            // no sign-in in progress
@@ -157,6 +169,9 @@ final class ThreadlyStore: ObservableObject {
 
     func signOut() {
         guard let api else { return }
+        // In-flight signed reads (e.g. a notifications-driven open) are
+        // dropped: nothing signed may land after the identity is gone.
+        invalidateTopicLoad()
         Task {
             _ = try? await api.auth_sign_out()
             await MainActor.run { self.signedInUser = nil }
@@ -179,6 +194,8 @@ final class ThreadlyStore: ObservableObject {
                 await MainActor.run {
                     self.postingReply = false
                     self.replySheetTopic = nil
+                    // posted: the draft has become a forum post
+                    self.replyDrafts.removeValue(forKey: topic.id)
                 }
                 await self.openTopicId(topic.id, title: topic.title)
             } catch {
@@ -294,6 +311,9 @@ final class ThreadlyStore: ObservableObject {
         loadingTopics = true
         defer { loadingTopics = false }
         self.scope = scope
+        // A scope switch also drops any in-flight thread open: the list
+        // is being rebuilt, so its rows' reader must not fill late.
+        invalidateTopicLoad()
         do {
             switch scope {
             case .latest:
@@ -310,9 +330,8 @@ final class ThreadlyStore: ObservableObject {
             }
             selectedTopic = nil
             posts = []
+            postsTotal = 0
             if searchResults.isEmpty == false { searchResults = [] }
-            selectedTopic = nil
-            posts = []
             statusLine = ""
         } catch {
             statusLine = "Couldn't load topics: \(error)"
@@ -350,22 +369,74 @@ final class ThreadlyStore: ObservableObject {
     }
 
     /// Opens a thread by id; notifications carry only the id.
+    ///
+    /// Navigation contract: the previous thread's posts are NOT kept on
+    /// screen while the new one loads — the header switches to the new
+    /// topic immediately and the pane shows a spinner, so stale content
+    /// can never sit under a new header. The load captures the
+    /// generation at request start; posts/total/error writes from a
+    /// superseded generation are dropped (issue #2: delayed topic A must
+    /// not clear or overwrite topic B).
     func openTopicId(_ id: Int, title: String) async {
+        invalidateTopicLoad()
+        let generation = topicLoadGeneration
         selectedTopic = TopicRow(id: id, title: title, categoryId: 0,
                                  postsCount: 0, replyCount: 0, views: 0,
                                  likeCount: 0, lastPosted: "")
         guard let api else { return }
         loadingPosts = true
-        defer { loadingPosts = false }
+        defer { if generation == topicLoadGeneration { loadingPosts = false } }
         do {
             let rows = try await api.topic_open(id: String(id))
+            guard generation == topicLoadGeneration else { return }
             posts = rows.compactMap(Self.post(from:))
             postsTotal = Self.postsTotal(from: rows)
             statusLine = ""
         } catch {
+            guard generation == topicLoadGeneration else { return }
             posts = []
             postsTotal = 0
-            statusLine = "Couldn't open the topic: \(error)"
+            topicLoadError = "Couldn't open the topic: \(error)"
+        }
+    }
+
+    /// Retry the open thread in place. The sidebar selection and scroll
+    /// position are untouched (the topic list is not rewritten), and a
+    /// draft reply for the thread survives in replyDrafts.
+    func retryOpenTopic() {
+        guard let topic = selectedTopic else { return }
+        Task { await openTopicId(topic.id, title: topic.title) }
+    }
+
+    /// Back to the list: drop the selection and any in-flight load, so a
+    /// late response cannot repopulate the closed reader.
+    func closeTopic() {
+        invalidateTopicLoad()
+        selectedTopic = nil
+        posts = []
+        postsTotal = 0
+    }
+
+    /// Bumps the load identity so every in-flight open completes as
+    /// stale; clears the transient load UI it owns.
+    private func invalidateTopicLoad() {
+        topicLoadGeneration += 1
+        loadingPosts = false
+        topicLoadError = nil
+    }
+
+    /// The draft saved for this thread, if any.
+    func draftReply(for topic: TopicRow) -> String {
+        replyDrafts[topic.id] ?? ""
+    }
+
+    /// Keeps the composer's text across dismissals, failures and topic
+    /// switches; an emptied draft is forgotten.
+    func saveDraftReply(_ raw: String, for topic: TopicRow) {
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            replyDrafts.removeValue(forKey: topic.id)
+        } else {
+            replyDrafts[topic.id] = raw
         }
     }
 
@@ -375,11 +446,16 @@ final class ThreadlyStore: ObservableObject {
     /// Returns every post; the caller drops the ones already rendered.
     func fetchAllPosts() async -> [PostRow]? {
         guard let id = selectedTopic?.id, let api else { return nil }
+        let generation = topicLoadGeneration
         do {
             let rows = try await api.topic_posts_all(id: String(id))
+            // a superseded load-all (topic switched meanwhile) must not
+            // move this thread's total
+            guard generation == topicLoadGeneration else { return nil }
             postsTotal = Self.postsTotal(from: rows)
             return rows.compactMap(Self.post(from:))
         } catch {
+            guard generation == topicLoadGeneration else { return nil }
             statusLine = "Couldn't load the whole thread: \(error)"
             return nil
         }

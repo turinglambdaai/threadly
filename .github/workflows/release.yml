@@ -16,7 +16,7 @@ env:
   # install step below references this so a bump is one edit. Pinned to a
   # rivet main revision (no tag yet) for the branded installer experience:
   # dmg-background layout, WiX wizard bitmaps, deb desktop refresh.
-  RIVET_PIN: c7f9881d25acea50babd51a2a48672ce0cf99b1f
+  RIVET_PIN: 9d766b4acab672844093204cb4845ef4ef933d2c
 
 jobs:
   macos:
@@ -136,7 +136,7 @@ jobs:
       # GitHub does not allow expressions in `uses:`, so this action pin
       # stays literal — keep it in sync with RIVET_PIN above.
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@cb97b88ad27dc604ef235f47e8e8c040ffd0670b
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@9d766b4acab672844093204cb4845ef4ef933d2c
       # The source-built minimal runtime ships without the packages that
       # provide `raco make` (compiler-lib) and `raco ctool` (cext-lib),
       # which `raco rivet build` drives; crypto is a rivet/distribution

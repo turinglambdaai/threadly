@@ -74,6 +74,10 @@
             <ProgressRing Grid.Column="1" x:Name="Loading" Width="44" Height="44" IsActive="True" Visibility="Collapsed" />
         </Grid>
 
-        <InfoBar Grid.Row="1" x:Name="StatusBar" IsOpen="False" IsClosable="True" Severity="Error" Message="" CloseButtonClick="StatusBar_Close" />
+        <InfoBar Grid.Row="1" x:Name="StatusBar" IsOpen="False" IsClosable="True" Severity="Error" Message="" CloseButtonClick="StatusBar_Close">
+            <InfoBar.ActionButton>
+                <Button x:Name="RetryOpenButton" Content="Retry" Click="Retry_Click" Visibility="Collapsed" />
+            </InfoBar.ActionButton>
+        </InfoBar>
     </Grid>
 </Window>

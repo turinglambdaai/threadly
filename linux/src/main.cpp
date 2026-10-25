@@ -100,6 +100,17 @@ struct AppState {
   // reader's current topic is what the composer targets.
   std::string signed_in_user;
   std::int64_t open_topic_id{0};
+  // Title of the open thread — Retry re-opens it from the error view.
+  std::string open_topic_title;
+  // Identity of the current thread open; completions from a superseded
+  // open are dropped so a late response for topic A can never overwrite
+  // topic B (issue #2).
+  std::uint64_t open_generation{0};
+  // Per-topic reply drafts, kept across failed opens, composer
+  // dismissals and topic switches; dropped once the reply posts.
+  std::map<std::int64_t, std::string> reply_drafts;
+  // Reader error view (issue #2 recovery contract).
+  GtkLabel* open_error_label{nullptr};
   // How many posts the reader page has rendered; the "load all" tail
   // starts there. The flag keeps a second click from double-loading.
   std::size_t reader_shown{0};
@@ -409,6 +420,11 @@ void reader_ready() { gtk_stack_set_visible_child_name(g_state.reader, "web"); }
 
 void reader_welcome() { gtk_stack_set_visible_child_name(g_state.reader, "welcome"); }
 
+void reader_open_error(std::string const& message) {
+  gtk_label_set_text(g_state.open_error_label, message.c_str());
+  gtk_stack_set_visible_child_name(g_state.reader, "open-error");
+}
+
 // ---- sidebar rendering -----------------------------------------------------------
 
 void apply_rows(std::vector<TopicRow> rows, bool const search_mode) {
@@ -473,10 +489,33 @@ void load_latest(bool fresh);
 void load_category(std::int64_t id, std::string const& slug);
 void load_notifications();
 void open_topic(TopicRow const& topic);
+void update_write_ui();
+
+/// Retry the failed thread in place (issue #2): the sidebar selection
+/// and scroll position are untouched, the per-topic draft survives.
+void retry_open_topic() {
+  if (g_state.open_topic_id == 0) return;
+  TopicRow topic;
+  topic.id = g_state.open_topic_id;
+  topic.title = g_state.open_topic_title;
+  open_topic(topic);
+}
+
+/// Back to the list: drop the selection and any in-flight open, so a
+/// late response cannot repopulate the closed reader.
+void close_topic() {
+  g_state.open_generation += 1;
+  g_state.open_topic_id = 0;
+  g_state.open_topic_title.clear();
+  update_write_ui();
+  reader_welcome();
+}
 
 // ---- completion plumbing -----------------------------------------------------------
 
 using RowsResultPayload = std::pair<std::uint64_t, rivet_app::Result<Rows>>;
+// same shape for the "load all" tail: generation-bound to its open
+using AllPostsPayload = std::pair<std::uint64_t, rivet_app::Result<Rows>>;
 
 RowsResultPayload* wrap_result(std::uint64_t const generation,
                                rivet_app::Result<Rows>&& result) {
@@ -573,21 +612,27 @@ int on_categories_delivered(gpointer user_data) {
 }
 
 int on_posts_delivered(gpointer user_data) {
-  std::unique_ptr<rivet_app::Result<Rows>> result(
-      static_cast<rivet_app::Result<Rows>*>(user_data));
+  std::unique_ptr<RowsResultPayload> payload(
+      static_cast<RowsResultPayload*>(user_data));
+  if (g_state.shutting_down.load(std::memory_order_acquire)) {
+    return G_SOURCE_REMOVE;
+  }
+  if (payload->first != g_state.open_generation) {
+    // superseded open (user moved on, signed out, went back): drop it —
+    // a late response must never touch the current reader (issue #2)
+    return G_SOURCE_REMOVE;
+  }
   try {
-    Rows const rows = result->get();
+    Rows const rows = payload->second.get();
     g_state.reader_shown = rows.size();
     std::string const document =
         reader_document(rows, !g_state.signed_in_user.empty());
     webkit_web_view_load_html(g_state.web_view, document.c_str(), kForumBase);
     reader_ready();
   } catch (std::exception const& error) {
-    status_show(std::string{"Couldn't open the topic: "} + error.what());
-    reader_ready();
+    reader_open_error(std::string{"Couldn't open the topic: "} + error.what());
   } catch (...) {
-    status_show("Couldn't open the topic: unknown backend failure");
-    reader_ready();
+    reader_open_error("Couldn't open the topic: unknown backend failure");
   }
   return G_SOURCE_REMOVE;
 }
@@ -662,24 +707,27 @@ void like_post(std::int64_t const post_id, bool const like) {
 // appends the ones the page has not rendered yet. The page keeps its
 // scroll because only the tail moves.
 int on_all_posts_delivered(gpointer user_data) {
-  std::unique_ptr<rivet_app::Result<Rows>> result(
-      static_cast<rivet_app::Result<Rows>*>(user_data));
+  std::unique_ptr<AllPostsPayload> payload(
+      static_cast<AllPostsPayload*>(user_data));
   g_state.load_all_in_flight.store(false, std::memory_order_release);
   if (!g_state.shutting_down.load(std::memory_order_acquire)) {
-    try {
-      Rows const rows = result->get();
-      std::string tail;
-      for (std::size_t i = g_state.reader_shown; i < rows.size(); ++i) {
-        tail += post_section(rows[i], !g_state.signed_in_user.empty());
-        tail += "\n";
+    // a tail fetched for A must not be appended to B's page
+    if (payload->first == g_state.open_generation) {
+      try {
+        Rows const rows = payload->second.get();
+        std::string tail;
+        for (std::size_t i = g_state.reader_shown; i < rows.size(); ++i) {
+          tail += post_section(rows[i], !g_state.signed_in_user.empty());
+          tail += "\n";
+        }
+        if (!tail.empty()) {
+          g_state.reader_shown = rows.size();
+          run_reader_js("threadlyAppendPosts(" + js_string_literal(tail) + ")");
+        }
+      } catch (std::exception const& error) {
+        status_show(std::string{"Couldn't load the whole thread: "} +
+                    error.what());
       }
-      if (!tail.empty()) {
-        g_state.reader_shown = rows.size();
-        run_reader_js("threadlyAppendPosts(" + js_string_literal(tail) + ")");
-      }
-    } catch (std::exception const& error) {
-      status_show(std::string{"Couldn't load the whole thread: "} +
-                  error.what());
     }
   }
   return G_SOURCE_REMOVE;
@@ -691,14 +739,15 @@ void load_all_posts() {
     return;
   }
   g_state.load_all_in_flight.store(true, std::memory_order_release);
+  auto const open_generation = g_state.open_generation;
   (void)g_state.api->topic_posts_all_async(
       std::to_string(g_state.open_topic_id),
-      [](rivet_app::Result<Rows> result) mutable {
+      [open_generation](rivet_app::Result<Rows> result) mutable {
         g_idle_add(
             [](gpointer user_data) -> int {
               return on_all_posts_delivered(user_data);
             },
-            new rivet_app::Result<Rows>(std::move(result)));
+            new AllPostsPayload(open_generation, std::move(result)));
       });
 }
 
@@ -842,6 +891,9 @@ int on_sign_in_url(gpointer user_data) {
 
 int on_sign_out_confirmed(gpointer) {
   if (g_state.api != nullptr) {
+    // in-flight signed reads are dropped: nothing signed may land after
+    // the identity is gone
+    g_state.open_generation += 1;
     (void)g_state.api->auth_sign_out_async(
         [](rivet_app::Result<void> result) mutable {
           std::string message;
@@ -907,22 +959,32 @@ void on_account_clicked(GtkButton*, gpointer) {
       });
 }
 
+// Reply outcome bound to the topic it posted against (the user may have
+// switched threads while the RPC ran); empty error = success.
+struct ReplyOutcome {
+  std::int64_t topic_id{0};
+  std::string error;
+};
+
 int on_reply_result_delivered(gpointer user_data) {
-  std::unique_ptr<std::string> error(static_cast<std::string*>(user_data));
+  std::unique_ptr<ReplyOutcome> outcome(
+      static_cast<ReplyOutcome*>(user_data));
   if (g_state.shutting_down.load(std::memory_order_acquire)) {
     return G_SOURCE_REMOVE;
   }
-  if (error->empty()) {
+  if (outcome->error.empty()) {
     status_show("Reply posted.");
+    // the draft became a forum post
+    g_state.reply_drafts.erase(outcome->topic_id);
     // reload the thread so the new post appears
     for (TopicRow const& topic : g_state.topics) {
-      if (topic.id == g_state.open_topic_id) {
+      if (topic.id == outcome->topic_id) {
         open_topic(topic);
         break;
       }
     }
   } else {
-    status_show("Reply failed: " + *error);
+    status_show("Reply failed: " + outcome->error);
   }
   return G_SOURCE_REMOVE;
 }
@@ -952,8 +1014,16 @@ int on_reply_composer(gpointer) {
   gtk_widget_set_vexpand(scrolled, TRUE);
   auto* text_view = gtk_text_view_new();
   gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD_CHAR);
-  gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view)),
-                           "", 0);
+  // seed the composer with this thread's saved draft, if any
+  auto const draft_topic = g_state.open_topic_id;
+  if (auto const draft = g_state.reply_drafts.find(draft_topic);
+      draft != g_state.reply_drafts.end()) {
+    gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view)),
+                             draft->second.c_str(), -1);
+  } else {
+    gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view)),
+                             "", 0);
+  }
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), text_view);
   auto* buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_set_halign(buttons, GTK_ALIGN_END);
@@ -970,8 +1040,12 @@ int on_reply_composer(gpointer) {
   struct ReplyContext {
     GtkWidget* window;
     GtkTextView* text_view;
+    std::int64_t topic_id{0};
   };
-  auto* context = new ReplyContext{composer, GTK_TEXT_VIEW(text_view)};
+  auto* context = new ReplyContext{composer, GTK_TEXT_VIEW(text_view), draft_topic};
+  // The draft is written back on every exit path (cancel, WM close);
+  // an emptied draft is forgotten. A successful post clears it in the
+  // reply completion; a failed post keeps it.
   g_signal_connect_data(
       ok, "clicked",
       G_CALLBACK(+[](GtkButton*, gpointer user_data) {
@@ -983,32 +1057,52 @@ int on_reply_composer(gpointer) {
         gchar* raw = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
         std::string const body = raw != nullptr ? raw : "";
         g_free(raw);
-        std::int64_t const topic_id = g_state.open_topic_id;
+        std::int64_t const topic_id = context->topic_id;
         gtk_window_destroy(GTK_WINDOW(context->window));
         if (g_state.api == nullptr ||
             body.find_first_not_of(" \t\r\n") == std::string::npos) {
+          // nothing to post; the (empty) draft is already forgotten
+          g_state.reply_drafts.erase(topic_id);
           return;
         }
         (void)g_state.api->post_create_async(
             std::to_string(topic_id), body,
-            [](rivet_app::Result<Rows> result) mutable {
-              std::string error;
+            [topic_id](rivet_app::Result<Rows> result) mutable {
+              ReplyOutcome outcome;
+              outcome.topic_id = topic_id;
               try {
                 (void)result.get();
               } catch (std::exception const& e) {
-                error = e.what();
+                outcome.error = e.what();
               }
               g_idle_add(
                   [](gpointer user_data) -> int {
                     return on_reply_result_delivered(user_data);
                   },
-                  new std::string(std::move(error)));
+                  new ReplyOutcome(std::move(outcome)));
             });
       }),
       context, [](gpointer user_data, GClosure*) { delete static_cast<ReplyContext*>(user_data); },
       GConnectFlags(0));
-  g_signal_connect_swapped(cancel, "clicked",
-                           G_CALLBACK(gtk_window_destroy), composer);
+  g_signal_connect_data(
+      cancel, "clicked",
+      G_CALLBACK(+[](GtkButton*, gpointer user_data) {
+        auto* context = static_cast<ReplyContext*>(user_data);
+        auto* buffer = gtk_text_view_get_buffer(context->text_view);
+        GtkTextIter begin;
+        GtkTextIter end;
+        gtk_text_buffer_get_bounds(buffer, &begin, &end);
+        gchar* raw = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+        std::string const body = raw != nullptr ? raw : "";
+        g_free(raw);
+        if (body.find_first_not_of(" \t\r\n") != std::string::npos) {
+          g_state.reply_drafts[context->topic_id] = body;
+        } else {
+          g_state.reply_drafts.erase(context->topic_id);
+        }
+        gtk_window_destroy(GTK_WINDOW(context->window));
+      }),
+      context, nullptr, GConnectFlags(0));
   gtk_window_present(GTK_WINDOW(composer));
   return G_SOURCE_REMOVE;
 }
@@ -1717,6 +1811,8 @@ void update_scope_heading() {
 void load_latest(bool const fresh) {
   if (g_state.api == nullptr) return;
   g_state.generation += 1;
+  // the list is being rebuilt, so its rows' reader must not fill late
+  g_state.open_generation += 1;
   g_state.search_active = false;
   g_state.notifications_active = false;
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.search), FALSE);
@@ -1738,6 +1834,8 @@ void load_latest(bool const fresh) {
 void load_category(std::int64_t const id, std::string const& slug) {
   if (g_state.api == nullptr) return;
   g_state.generation += 1;
+  // the list is being rebuilt, so its rows' reader must not fill late
+  g_state.open_generation += 1;
   g_state.search_active = false;
   g_state.notifications_active = false;
   reader_loading();
@@ -1758,6 +1856,8 @@ void run_search(std::string const& query) {
   if (trimmed.empty()) return;
 
   g_state.generation += 1;
+  // the list is being rebuilt, so its rows' reader must not fill late
+  g_state.open_generation += 1;
   g_state.search_active = true;
   g_state.notifications_active = false;
   reader_loading();
@@ -1771,12 +1871,18 @@ void run_search(std::string const& query) {
 void open_topic(TopicRow const& topic) {
   if (g_state.api == nullptr) return;
   g_state.open_topic_id = topic.id;
+  g_state.open_topic_title = topic.title;
+  // Identity for this open; a late completion from an older request is
+  // dropped (issue #2). The reader shows the spinner — the old thread's
+  // page is not kept under the new selection.
+  g_state.open_generation += 1;
+  auto const open_generation = g_state.open_generation;
   update_write_ui();
   reader_loading();
   (void)g_state.api->topic_open_async(
-      std::to_string(topic.id), [](rivet_app::Result<Rows> result) mutable {
+      std::to_string(topic.id), [open_generation](rivet_app::Result<Rows> result) mutable {
         g_idle_add(on_posts_delivered,
-                   new rivet_app::Result<Rows>(std::move(result)));
+                   wrap_result(open_generation, std::move(result)));
       });
 }
 
@@ -1785,6 +1891,8 @@ void open_topic(TopicRow const& topic) {
 void load_notifications() {
   if (g_state.api == nullptr) return;
   g_state.generation += 1;
+  // the list is being rebuilt, so its rows' reader must not fill late
+  g_state.open_generation += 1;
   g_state.notifications_active = true;
   g_state.search_active = false;
   reader_loading();
@@ -1992,6 +2100,38 @@ GtkWidget* build_loading() {
   return box;
 }
 
+// Failed open (issue #2 recovery): message + Retry/Back bound to the
+// thread that failed.
+GtkWidget* build_open_error() {
+  auto* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
+  gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
+  auto* icon = gtk_image_new_from_icon_name("network-offline-symbolic");
+  gtk_image_set_pixel_size(GTK_IMAGE(icon), 48);
+  auto* label = gtk_label_new("");
+  gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(label), 46);
+  gtk_widget_add_css_class(label, "dim-label");
+  g_state.open_error_label = GTK_LABEL(label);
+  auto* buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(buttons, GTK_ALIGN_CENTER);
+  auto* retry = gtk_button_new_with_label("Retry");
+  gtk_widget_add_css_class(retry, "suggested-action");
+  g_signal_connect(retry, "clicked",
+                   G_CALLBACK(+[](GtkButton*, gpointer) { retry_open_topic(); }),
+                   nullptr);
+  auto* back = gtk_button_new_with_label("Back to list");
+  g_signal_connect(back, "clicked",
+                   G_CALLBACK(+[](GtkButton*, gpointer) { close_topic(); }),
+                   nullptr);
+  gtk_box_append(GTK_BOX(buttons), retry);
+  gtk_box_append(GTK_BOX(buttons), back);
+  gtk_box_append(GTK_BOX(box), icon);
+  gtk_box_append(GTK_BOX(box), label);
+  gtk_box_append(GTK_BOX(box), buttons);
+  return box;
+}
+
 GtkWidget* build_sidebar() {
   auto* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
   gtk_widget_set_margin_top(box, 10);
@@ -2140,6 +2280,7 @@ void on_activate(GtkApplication* app, gpointer) {
   auto* stack = gtk_stack_new();
   gtk_stack_add_named(GTK_STACK(stack), build_welcome(), "welcome");
   gtk_stack_add_named(GTK_STACK(stack), build_loading(), "loading");
+  gtk_stack_add_named(GTK_STACK(stack), build_open_error(), "open-error");
   gtk_stack_add_named(GTK_STACK(stack), web, "web");
   gtk_paned_set_end_child(GTK_PANED(pane), stack);
   gtk_paned_set_shrink_end_child(GTK_PANED(pane), FALSE);

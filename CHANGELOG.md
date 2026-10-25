@@ -5,12 +5,39 @@ All notable changes to Threadly are documented here. Format follows
 
 ## Unreleased
 
+### Added
+- The reader now binds every thread load to the selected topic's
+  identity (issue #2): switching threads while one is still loading
+  drops the late completion, so topic A can no longer overwrite topic
+  B's posts, counts or reply target — and a late failure for A can no
+  longer clear B. Signing out or going back to the list drops in-flight
+  opens the same way.
+- Failed thread opens recover in place on every desktop host (issue
+  #2): the reader shows the failure with Retry and Back-to-list
+  actions; retry re-opens the same thread without restarting, and the
+  sidebar selection and list position stay untouched.
+- Reply drafts survive per thread: a failed open, a dismissed composer
+  or a switch to another topic keeps what was typed, on all three
+  hosts; the draft is dropped only once the reply actually posts.
+- Store-level delayed-response fixtures for the macOS host
+  (`macos-host/Tests`): a scripted RivetAPI transport replays the
+  issue #2 interleavings (slow A / fast B, late-A error, offline retry,
+  close/sign-out invalidation, drafts, load-all identity) without a
+  network or backend. Run via `swift test`; CI runs them after the
+  build.
+
 ### Changed
 - "Check for Updates…" moved next to "About" on every platform per the
   family menu convention: it now lives in the App menu directly below
   About on macOS, and in a Help menu (Ctrl+U accelerator) on Windows and
   Linux — replacing the always-visible header icon buttons, which were
   retired as low-frequency actions.
+
+### Security
+- Sign-in completion no longer prints the decrypted authorization
+  payload (which carries the user API key) to stderr, and a failed
+  parse no longer embeds that payload in the error message the hosts
+  surface in their status line (issue #1: secrets never reach feedback).
 
 ## 0.13.0 - 2026-10-16
 

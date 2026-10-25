@@ -186,9 +186,10 @@
                                         "-out" (path->string pt-file)))
         (error 'auth-complete "decryption failed (wrong key or bad code)"))
       (define pt (file->bytes pt-file))
-      (eprintf "auth-diag: priv=~s pt-bytes=~v\n"
-               (path->string (private-key-path)) pt)
-      (with-handlers ([exn:fail? (λ (e) (error 'auth-complete "decrypted payload is not JSON (~v); bytes: ~v" (exn-message e) pt))])
+      ;; The decrypted payload carries the user API key: neither the bytes
+      ;; nor a parse failure's payload excerpt may reach a message —
+      ;; errors here surface in the hosts' status line.
+      (with-handlers ([exn:fail? (λ (_) (error 'auth-complete "decrypted payload is not JSON"))])
         (bytes->jsexpr pt)))
     (lambda ()
       (with-handlers ([exn:fail? void])
