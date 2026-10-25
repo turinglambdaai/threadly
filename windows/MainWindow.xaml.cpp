@@ -1136,7 +1136,7 @@ winrt::fire_and_forget MainWindow::ReplyDialogAsync() {
       body.find_first_not_of(" \t\r\n") == std::string::npos) {
     // dismissed with text: keep it as the thread's draft
     if (body.find_first_not_of(" \t\r\n") != std::string::npos) {
-      reply_drafts_[topic_id] = body;
+      reply_drafts_[topic_id] = wide(body);
     } else {
       reply_drafts_.erase(topic_id);
     }
