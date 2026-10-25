@@ -88,11 +88,11 @@ jobs:
           RIVET_ROOT: ${{ github.workspace }}/rivet
           RIVET_RACKET_FRAMEWORK_DIR: ${{ github.workspace }}/.rivet/stage/Frameworks
         run: |
-          # setup-racket does not export its install dir; derive the
-          # engine headers from the racket on PATH (<root>/include).
-          racket_root="$(dirname "$(dirname "$(command -v racket)")")"
+          # Rivet's own runtime discovery, same source `raco rivet build`
+          # uses for its -Xcc include path.
+          racket_include="$(raco rivet doctor --json | jq -r '.runtime.include-dir')"
           swift test --package-path macos-host --scratch-path .rivet/build/macos \
-            -Xcc "-I${racket_root}/include"
+            -Xcc "-I${racket_include}"
       - name: Launch smoke (ad-hoc build)
         run: |
           open dist/threadly.app
