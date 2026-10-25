@@ -51,6 +51,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                        Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void Translate_Click(winrt::Windows::Foundation::IInspectable const& sender,
                        Microsoft::UI::Xaml::RoutedEventArgs const& args);
+  void Retry_Click(winrt::Windows::Foundation::IInspectable const& sender,
+                   Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
  private:
   struct TopicRow {
@@ -70,6 +72,12 @@ struct MainWindow : MainWindowT<MainWindow> {
                  bool searchMode);
   void SetReadyUi();
   void SetErrorUi(std::string const& message);
+  // A failed topic open: same InfoBar as SetErrorUi, plus the Retry
+  // action bound to the failed topic (issue #2's recovery contract).
+  void SetTopicOpenError(std::string const& message);
+  // Bumps the topic-open identity so any in-flight open completes as
+  // stale, and clears the spinner it owns.
+  void InvalidateTopicOpen();
   void SetStatus(std::string const& message);
   void SetUpdateStatus(std::wstring const& message);
 
@@ -134,6 +142,13 @@ struct MainWindow : MainWindowT<MainWindow> {
   // there. load_all_in_flight_ keeps a second click from double-loading.
   std::wstring signed_in_user_;
   std::int64_t open_topic_id_{0};
+  // Identity of the current topic-open request; completions from a
+  // superseded request are dropped so a late response for topic A can
+  // never overwrite topic B (issue #2).
+  std::uint64_t topic_open_request_{0};
+  // Per-topic reply drafts, kept across failed opens, composer
+  // dismissals and topic switches; dropped once the reply posts.
+  std::map<std::int64_t, std::wstring> reply_drafts_;
   std::size_t reader_shown_{0};
   bool load_all_in_flight_{false};
   bool sign_in_running_{false};

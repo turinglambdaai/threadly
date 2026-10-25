@@ -137,6 +137,29 @@ pin、开发跟最新。图标改版走 `scripts/make-icons.py`,禁止手改生�
 - 开工先检查干净工作树与远端，以 fast-forward-only 更新并记录 SHA；共享文件一次一个写入者，保留其他 checkout 的未提交工作。
 - 每次只完成一个可验收切片，记录 owned files、依赖 pin、命令/平台/产物证据和回滚。已实现、已发布、实机验收分别陈述；不修改 requirements 或复用旧证据来制造通过。
 
+## 交互契约与验证状态（issue #1/#2，2026-10-25 切片）
+
+导航身份与恢复的契约（三宿主同语义，不等像素）：读线程的加载、帖子、
+总数、错误与回复目标一律绑定捕获的主题身份；被取代的加载完成即丢弃。
+切换主题时旧帖不留屏（新标题 + spinner），失败时读者视图给
+Retry / Back to list；重试原位进行，侧栏选择与列表位置不动；每主题
+回复草稿在失败加载、关闭撰写器、切换主题后保留，帖子发出后才清除。
+退出登录、回到列表会作废在途的线程加载；"load all" 尾段同样绑定身份。
+引擎侧 429 上抛不重试、断网回落带缓存、密钥不出现在任何错误/日志/反馈
+（`tests/auth-test.rkt` 有输出侧回归测试）。
+
+| 验证项 | macOS | Windows | Linux |
+|---|---|---|---|
+| 延迟响应 fixture（慢 A 快 B / 迟到 A 错误 / 离线重试 / 作废 / 草稿 / load-all 身份） | ✅ `swift test`（7 例，红绿验证：去守卫即复现 issue #2 描述的三种失败） | ❌ 未运行（CI 仅编译门） | ❌ 未运行（CI 仅 headless 启动冒烟） |
+| 构建/启动 | ✅ `raco rivet build` + 新 UI 字符串进二进制 + CI launch smoke | ✅ CI 编译门 | ✅ CI 编译门 + headless boot |
+| 打包产物实机验收（安装后读/搜/登录失败/退出/更新） | ❌ 未做（留给发布门禁） | ❌ 未做 | ❌ 未做 |
+
+fixture 位于 `macos-host/Tests/RivetHostTests/`（脚本化 RivetAPI 传输，
+无网络无后端）；CI 在 macOS job 构建后跑 `swift test`。Windows/Linux
+的等价 fixture 未建（宿主测试基建不存在），其竞态修复与 macOS 同模式
+（请求 id / open generation 校验），当前以编译门 + 代码同构性背书——
+这是明确的未验证项，不是等价声明。
+
 ## Documentation languages
 
 Public default documentation is English; maintain complete Chinese user paths in `*.zh-CN.md`, with reciprocal links. Update both languages when prices, quotas, installation, recovery, privacy or supported platforms change. API/protocol identifiers and commands remain unchanged; do not maintain a second normative protocol or implementation. Follow the [family language policy](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md). Existing internal notes are not a claim that every document is bilingual.

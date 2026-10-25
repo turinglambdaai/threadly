@@ -88,6 +88,38 @@
        (check-false (file-exists? (auth:private-key-path))))))
 
   (skip-unless-openssl
+   (test-case "auth-complete failure messages never echo the payload"
+     ;; The decryptable payload carries the API key; a parse failure's
+     ;; message must not carry the plaintext (it surfaces in the hosts'
+     ;; status line via auth-complete's notify).
+     (parameterize ([current-data-dir
+                     (make-temporary-file "threadly-auth-leak-~a" 'directory)])
+       (auth:auth-begin)
+       (define keys-dir
+         (simple-form-path (build-path (auth:private-key-path) 'up)))
+       (define pub (build-path keys-dir "test-pub.pem"))
+       (system* openssl "pkey" "-in" (path->string (auth:private-key-path))
+                "-pubout" "-out" (path->string pub))
+       (define secret "secret-key-must-not-appear-in-feedback")
+       (define plain (path->string (make-temporary-file "thr-plain~a")))
+       (with-output-to-file plain
+         (lambda () (display secret))
+         #:exists 'truncate)
+       (define code (encrypt-code openssl pub plain))
+       (check-exn exn:fail?
+                  (lambda ()
+                    (with-handlers
+                        ([exn:fail? (lambda (e)
+                                      (check-false
+                                       (string-contains? (exn-message e) secret)
+                                       "error message carries the decrypted payload")
+                                      (raise e))])
+                      (auth:auth-complete code))))
+       (check-false (auth:auth-signed-in?))
+       (auth:auth-sign-out)
+       (check-false (file-exists? (auth:private-key-path))))))
+
+  (skip-unless-openssl
    (test-case "sign-out clears every credential file"
      (parameterize ([current-data-dir
                      (make-temporary-file "threadly-auth-so-~a" 'directory)])

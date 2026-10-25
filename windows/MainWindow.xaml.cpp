@@ -611,6 +611,12 @@ void MainWindow::OpenTopic(std::int64_t const id) {
     return;
   }
   open_topic_id_ = id;
+  // Identity for this open; a late completion from an older request is
+  // dropped, so switching topics while one is loading cannot present A's
+  // posts under B (issue #2). The reader shows the spinner — the old
+  // thread's page is not kept under the new header.
+  ++topic_open_request_;
+  auto const request = topic_open_request_;
   ApplySignInState();
   UpdateAIButtons(false);
   Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Visible);
@@ -620,9 +626,10 @@ void MainWindow::OpenTopic(std::int64_t const id) {
     auto const weak = get_weak();
     (void)api.topic_open_async(
         std::to_string(id),
-        [dispatcher, weak](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
-          dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
+        [dispatcher, weak, request](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+          dispatcher.TryEnqueue([weak, request, result = std::move(result)]() mutable {
             if (auto window = weak.get()) {
+              if (window->topic_open_request_ != request) return;
               window->Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
               try {
                 auto const rows = result.get();
@@ -636,15 +643,21 @@ void MainWindow::OpenTopic(std::int64_t const id) {
                       "Reader unavailable; open the thread on the forum");
                 }
               } catch (std::exception const& e) {
-                window->SetErrorUi(e.what());
+                window->SetTopicOpenError(e.what());
               }
             }
           });
         });
   } catch (std::exception const& e) {
     Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
-    SetErrorUi(e.what());
+    SetTopicOpenError(e.what());
   }
+}
+
+void MainWindow::Retry_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  if (open_topic_id_ != 0) OpenTopic(open_topic_id_);
 }
 
 void MainWindow::ApplyRows(
@@ -797,6 +810,7 @@ void MainWindow::CheckForUpdates_Click(winrt::Windows::Foundation::IInspectable 
 }
 
 void MainWindow::SetReadyUi() {
+  RetryOpenButton().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
   if (StatusBar().IsOpen() &&
       StatusBar().Severity() ==
           Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error) {
@@ -806,9 +820,21 @@ void MainWindow::SetReadyUi() {
 
 void MainWindow::SetErrorUi(std::string const& message) {
   Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
+  // a generic failure has no bound topic to retry
+  RetryOpenButton().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
   StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error);
   StatusBar().Message(winrt::to_hstring(message));
   StatusBar().IsOpen(true);
+}
+
+void MainWindow::SetTopicOpenError(std::string const& message) {
+  SetErrorUi(message);
+  RetryOpenButton().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Visible);
+}
+
+void MainWindow::InvalidateTopicOpen() {
+  ++topic_open_request_;
+  Loading().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
 }
 
 void MainWindow::SetStatus(std::string const& message) {
@@ -1055,6 +1081,9 @@ winrt::fire_and_forget MainWindow::SignOutConfirmAsync() {
               try {
                 result.get();
                 window->signed_in_user_.clear();
+                // in-flight signed reads are dropped: nothing signed may
+                // land after the identity is gone
+                window->InvalidateTopicOpen();
                 window->ApplySignInState();
                 window->SetUpdateStatus(L"Signed out.");
               } catch (std::exception const& e) {
@@ -1071,11 +1100,18 @@ winrt::fire_and_forget MainWindow::SignOutConfirmAsync() {
 winrt::fire_and_forget MainWindow::ReplyDialogAsync() {
   if (open_topic_id_ == 0 || signed_in_user_.empty()) co_return;
   auto const weak = get_weak();
+  // The draft for this thread survives failed opens, dismissals and
+  // topic switches; only a posted reply clears it.
+  auto const draft_topic = open_topic_id_;
   muxc::TextBox box;
   box.PlaceholderText(L"Write your reply in Markdown\u2026");
   box.TextWrapping(winrt::Microsoft::UI::Xaml::TextWrapping::Wrap);
   box.AcceptsReturn(true);
   box.Height(170);
+  if (auto const draft = reply_drafts_.find(draft_topic);
+      draft != reply_drafts_.end()) {
+    box.Text(draft->second);
+  }
   auto label = muxc::TextBlock{};
   label.Text(L"Posting as " + signed_in_user_ +
              L". Discourse posts are Markdown.");
@@ -1098,8 +1134,16 @@ winrt::fire_and_forget MainWindow::ReplyDialogAsync() {
   auto const topic_id = open_topic_id_;
   if (result != winrt::Microsoft::UI::Xaml::Controls::ContentDialogResult::Primary ||
       body.find_first_not_of(" \t\r\n") == std::string::npos) {
+    // dismissed with text: keep it as the thread's draft
+    if (body.find_first_not_of(" \t\r\n") != std::string::npos) {
+      reply_drafts_[topic_id] = wide(body);
+    } else {
+      reply_drafts_.erase(topic_id);
+    }
     co_return;
   }
+  // posting: the draft becomes a forum post on success (cleared in the
+  // completion below) and stays as the draft on failure
 
   auto const backend = std::atomic_load(&backend_);
   if (backend == nullptr || !backend->running()) co_return;
@@ -1115,6 +1159,7 @@ winrt::fire_and_forget MainWindow::ReplyDialogAsync() {
                 if (auto window = weak.get()) {
                   try {
                     (void)res.get();
+                    window->reply_drafts_.erase(topic_id);
                     window->SetUpdateStatus(L"Reply posted.");
                     window->OpenTopic(topic_id);
                   } catch (std::exception const& e) {
@@ -1270,16 +1315,22 @@ void MainWindow::LoadAllPosts() {
   auto const backend = std::atomic_load(&backend_);
   if (backend == nullptr || !backend->running()) return;
   load_all_in_flight_ = true;
+  // bound to the open that started it: a tail fetched for A must not be
+  // appended to B's page
+  auto const request = topic_open_request_;
   auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
   try {
     rivet_app::API api(*backend);
     (void)api.topic_posts_all_async(
         std::to_string(open_topic_id_),
-        [dispatcher, weak](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
-          dispatcher.TryEnqueue([weak, result = std::move(result)]() mutable {
+        [dispatcher, weak, request](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+          dispatcher.TryEnqueue([weak, request, result = std::move(result)]() mutable {
             if (auto window = weak.get()) {
+              // a superseded load-all is over either way; reset before
+              // dropping so the new topic's bar can fire
               window->load_all_in_flight_ = false;
+              if (window->topic_open_request_ != request) return;
               try {
                 auto const rows = result.get();
                 std::string tail;

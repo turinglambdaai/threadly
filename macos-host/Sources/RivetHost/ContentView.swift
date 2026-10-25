@@ -539,6 +539,21 @@ private struct DetailView: View {
                 Spacer()
                 ProgressView("Loading thread…")
                 Spacer()
+            } else if let loadError = store.topicLoadError {
+                // Failed open, tied to the thread that failed: retry in
+                // place (selection and list position untouched, draft
+                // preserved) or go back to the list.
+                Spacer()
+                ContentUnavailableView {
+                    Label("Couldn't open this thread", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(loadError)
+                } actions: {
+                    Button("Retry") { store.retryOpenTopic() }
+                        .keyboardShortcut(.defaultAction)
+                    Button("Back to list") { store.closeTopic() }
+                }
+                Spacer()
             } else if store.posts.isEmpty {
                 Spacer()
                 ContentUnavailableView(
@@ -937,6 +952,9 @@ private struct AIPanelView: View {
 private struct ReplySheetView: View {
     @EnvironmentObject private var store: ThreadlyStore
     let topic: TopicRow
+    // seeded from the store's per-topic draft on appear and written back
+    // on every keystroke, so a failed load, a dismissal or a topic
+    // switch never eats what was typed
     @State private var raw = ""
     @FocusState private var focused: Bool
 
@@ -1020,7 +1038,13 @@ private struct ReplySheetView: View {
         }
         .padding(24)
         .frame(width: 540)
-        .onAppear { focused = true }
+        .onAppear {
+            raw = store.draftReply(for: topic)
+            focused = true
+        }
+        .onChange(of: raw) { _, newValue in
+            store.saveDraftReply(newValue, for: topic)
+        }
     }
 
     private func submit() {

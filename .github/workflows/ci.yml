@@ -12,7 +12,7 @@ concurrency:
 env:
   # Single source of truth for the rivet pin (same value as release.yml);
   # every rivet checkout below references this so a bump is one edit.
-  RIVET_PIN: c7f9881d25acea50babd51a2a48672ce0cf99b1f
+  RIVET_PIN: 9d766b4acab672844093204cb4845ef4ef933d2c
 
 jobs:
   backend:
@@ -83,6 +83,16 @@ jobs:
         run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
       - name: Build + package + verify
         run: raco rivet package
+      - name: Store contract fixtures (delayed-response, issue #2)
+        env:
+          RIVET_ROOT: ${{ github.workspace }}/rivet
+          RIVET_RACKET_FRAMEWORK_DIR: ${{ github.workspace }}/.rivet/stage/Frameworks
+        run: |
+          # Rivet's own runtime discovery, same source `raco rivet build`
+          # uses for its -Xcc include path.
+          racket_include="$(raco rivet doctor --json | jq -r '.runtime["include-dir"]')"
+          swift test --package-path macos-host --scratch-path .rivet/build/macos \
+            -Xcc "-I${racket_include}"
       - name: Launch smoke (ad-hoc build)
         run: |
           open dist/threadly.app

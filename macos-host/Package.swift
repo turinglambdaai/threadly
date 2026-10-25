@@ -41,6 +41,19 @@ let package = Package(
                 // (@loader_path). Both must resolve.
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]
+        ),
+        // Store-level contracts (issue #2): the delayed-response fixtures
+        // drive ThreadlyStore through a scripted RivetAPI transport — no
+        // network, no backend. Run via `swift test` with the same env
+        // vars the build uses; CI runs it after raco rivet build.
+        .testTarget(
+            name: "RivetHostTests",
+            dependencies: ["RivetHost", .product(name: "RivetRuntime", package: "rivet")],
+            // the test bundle links Racket.framework too; without an
+            // rpath at the stage layout dyld cannot resolve @rpath
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", racketFrameworkDir])
+            ]
         )
     ]
 )
