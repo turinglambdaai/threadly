@@ -90,7 +90,7 @@ jobs:
         run: |
           # Rivet's own runtime discovery, same source `raco rivet build`
           # uses for its -Xcc include path.
-          racket_include="$(raco rivet doctor --json | jq -r '.runtime.include-dir')"
+          racket_include="$(raco rivet doctor --json | jq -r '.runtime["include-dir"]')"
           swift test --package-path macos-host --scratch-path .rivet/build/macos \
             -Xcc "-I${racket_include}"
       - name: Launch smoke (ad-hoc build)
