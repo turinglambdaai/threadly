@@ -35,7 +35,7 @@ jobs:
       - name: Checkout Rivet (sibling)
         uses: actions/checkout@v4
         with:
-          repository: turinglambdaai/rivet
+          repository: turlamai/rivet
           ref: ${{ env.RIVET_PIN }}
           path: rivet
       - name: Link Rivet
@@ -70,7 +70,7 @@ jobs:
       - name: Checkout Rivet (sibling)
         uses: actions/checkout@v4
         with:
-          repository: turinglambdaai/rivet
+          repository: turlamai/rivet
           ref: ${{ env.RIVET_PIN }}
           path: rivet
       - name: Install Racket (CS, arm64)
@@ -108,7 +108,7 @@ jobs:
       - name: Checkout Rivet (sibling)
         uses: actions/checkout@v4
         with:
-          repository: turinglambdaai/rivet
+          repository: turlamai/rivet
           ref: ${{ env.RIVET_PIN }}
           path: rivet
       - name: Install Racket (CS)
@@ -153,7 +153,7 @@ jobs:
       - name: Checkout Rivet (sibling)
         uses: actions/checkout@v4
         with:
-          repository: turinglambdaai/rivet
+          repository: turlamai/rivet
           ref: ${{ env.RIVET_PIN }}
           path: rivet
       - name: Install Racket (CS)

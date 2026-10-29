@@ -40,7 +40,7 @@ jobs:
       - name: Install pinned Rivet
         run: |
           set -euo pipefail
-          git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
+          git clone https://github.com/turlamai/rivet.git "$RUNNER_TEMP/rivet"
           git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_PIN"
           raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
       - name: Version preflight (VERSION == rivet.rktd == app/version.rkt == tag)
@@ -89,7 +89,7 @@ jobs:
       - name: Install pinned Rivet
         shell: pwsh
         run: |
-          git clone https://github.com/turinglambdaai/rivet.git "$env:RUNNER_TEMP\rivet"
+          git clone https://github.com/turlamai/rivet.git "$env:RUNNER_TEMP\rivet"
           git -C "$env:RUNNER_TEMP\rivet" checkout $env:RIVET_PIN
           raco pkg install --auto --no-docs --name rivet --link "$env:RUNNER_TEMP\rivet"
       - name: Install WiX (v5; rivet's MSI toolchain)
@@ -136,7 +136,7 @@ jobs:
       # GitHub does not allow expressions in `uses:`, so this action pin
       # stays literal — keep it in sync with RIVET_PIN above.
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@9d766b4acab672844093204cb4845ef4ef933d2c
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@9d766b4acab672844093204cb4845ef4ef933d2c
       # The source-built minimal runtime ships without the packages that
       # provide `raco make` (compiler-lib) and `raco ctool` (cext-lib),
       # which `raco rivet build` drives; crypto is a rivet/distribution
@@ -146,7 +146,7 @@ jobs:
       - name: Install pinned Rivet
         run: |
           set -euo pipefail
-          git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
+          git clone https://github.com/turlamai/rivet.git "$RUNNER_TEMP/rivet"
           git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_PIN"
           raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
       - name: Install GTK4, WebKitGTK, rpm and packaging tooling
@@ -203,7 +203,7 @@ jobs:
       - name: Install pinned Rivet
         run: |
           set -euo pipefail
-          git clone https://github.com/turinglambdaai/rivet.git "$RUNNER_TEMP/rivet"
+          git clone https://github.com/turlamai/rivet.git "$RUNNER_TEMP/rivet"
           git -C "$RUNNER_TEMP/rivet" checkout "$RIVET_PIN"
           raco pkg install --auto --no-docs --name rivet --link "$RUNNER_TEMP/rivet"
       - uses: actions/download-artifact@v4
@@ -260,4 +260,4 @@ jobs:
           cp "dist/threadly-${VERSION}-linux-arm64.deb" stable-alias/threadly-linux-arm64.deb
           cp "dist/threadly-${VERSION}-linux-x86_64.AppImage" stable-alias/threadly-linux-x64.AppImage
           cp "dist/threadly-${VERSION}-linux-aarch64.AppImage" stable-alias/threadly-linux-arm64.AppImage
-          gh release upload "$GITHUB_REF_NAME" stable-alias/* --clobber -R turinglambdaai/threadly
+          gh release upload "$GITHUB_REF_NAME" stable-alias/* --clobber -R turlamai/threadly

@@ -7,7 +7,7 @@ proposals, and ecosystem news actually happen; Threadly gives those long
 technical threads the reading experience they deserve, on the desktop
 on macOS, Windows and Linux. Mobile is deferred.
 
-[![CI](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/threadly/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/threadly)](https://github.com/turinglambdaai/threadly/releases/latest) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)](https://github.com/turinglambdaai/threadly/releases/latest) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Racket](https://img.shields.io/badge/Racket-9.3-9D00FF?logo=racket&logoColor=white)
+[![CI](https://github.com/turlamai/threadly/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/threadly/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turlamai/threadly)](https://github.com/turlamai/threadly/releases/latest) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)](https://github.com/turlamai/threadly/releases/latest) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Racket](https://img.shields.io/badge/Racket-9.3-9D00FF?logo=racket&logoColor=white)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -101,7 +101,7 @@ racket app/cli.rkt search "raco"     # search the archive
 racket app/cli.rkt doctor            # local environment check (offline)
 ```
 
-Threadly follows the [Rivet](https://github.com/turinglambdaai/rivet)
+Threadly follows the [Rivet](https://github.com/turlamai/rivet)
 architecture: a Racket engine behind first-party native hosts. The macOS
 shell lives in `macos-host/` and builds through `raco rivet build`.
 
