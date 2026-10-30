@@ -862,6 +862,19 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
     // Stretch so the reader fills its pane.
     webview.HorizontalAlignment(mx::HorizontalAlignment::Stretch);
     webview.VerticalAlignment(mx::VerticalAlignment::Stretch);
+    // WebView2's default user-data folder sits beside the executable —
+    // under Program Files that location is unwritable for a filtered
+    // (UAC) admin token, and the release-VM acceptance caught the
+    // result: 0xc0000005 at startup, before any of the degrade paths
+    // could run. Park the folder in %LOCALAPPDATA%, which the app can
+    // always write and which stays per-user on shared machines.
+    if (const char* local_app_data = std::getenv("LOCALAPPDATA")) {
+      winrt::Microsoft::Web::WebView2::Core::CoreWebView2CreationProperties
+          props;
+      props.UserDataFolder(winrt::to_hstring(local_app_data) +
+                           L"\\threadly\\WebView2");
+      webview.CreationProperties(props);
+    }
     ReaderHost().Content(webview);
     ReaderHost().HorizontalContentAlignment(mx::HorizontalAlignment::Stretch);
     ReaderHost().VerticalContentAlignment(mx::VerticalAlignment::Stretch);
