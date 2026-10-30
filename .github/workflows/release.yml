@@ -237,7 +237,13 @@ jobs:
           cd dist
           for f in *.sha256; do [ -s "$f" ] || rm -f "$f"; done
           cat *.sha256 > SHA256SUMS
+          # Draft, not public: the family release gate (AGENTS.md) requires
+          # the real artifacts — installed, launched, reading real threads —
+          # to pass on every platform BEFORE anything is public. Promotion
+          # is `gh release edit <tag> --draft=false --latest` after that
+          # acceptance pass.
           gh release create "$GITHUB_REF_NAME" \
+            --draft \
             --title "Threadly ${VERSION}" \
             --notes-file /tmp/notes.md \
             *.zip *.tar.gz *.dmg *.msi *.deb *.rpm *.AppImage \

@@ -3,7 +3,11 @@
 All notable changes to Threadly are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
-## Unreleased
+## 0.14.0 - 2026-10-30
+
+The first release verified on real hardware of all three desktop
+platforms: packaged products installed and exercised on Windows, Linux
+and macOS virtual machines, reading live forum data end to end.
 
 ### Added
 - The reader now binds every thread load to the selected topic's
@@ -32,6 +36,21 @@ All notable changes to Threadly are documented here. Format follows
   About on macOS, and in a Help menu (Ctrl+U accelerator) on Windows and
   Linux — replacing the always-visible header icon buttons, which were
   retired as low-frequency actions.
+
+### Fixed
+- Windows: topic rows ignored clicks and the reader pane stayed
+  permanently white (issue #5). Two independent causes: the topic list,
+  disabled in the XAML until the shell is ready, was never re-enabled
+  once rows landed (search and the category picker re-enabled
+  themselves in their own completion paths, the list did not); and the
+  code-created reader WebView2 never got a layout slot — WinUI 3 no
+  longer defaults ContentControl content alignment to Stretch and a
+  WebView2 measures 0×0 before rendering, so pages loaded into a
+  zero-sized surface. Both fixed; acceptance VM confirms rows open
+  threads and the reader renders like macOS and Linux.
+- Releases now publish as drafts: the real artifacts must pass an
+  install-and-read acceptance pass on all three desktop platforms
+  before the release is promoted to public.
 
 ### Security
 - Sign-in completion no longer prints the decrypted authorization
