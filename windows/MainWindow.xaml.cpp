@@ -862,6 +862,23 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
     // Stretch so the reader fills its pane.
     webview.HorizontalAlignment(mx::HorizontalAlignment::Stretch);
     webview.VerticalAlignment(mx::VerticalAlignment::Stretch);
+    // WebView2's default user-data folder sits beside the executable —
+    // under Program Files that location is unwritable for a filtered
+    // (UAC) admin token, and the release-VM acceptance caught the
+    // result: 0xc0000005 at startup, before any of the degrade paths
+    // could run. Point the loader at %LOCALAPPDATA% — always writable,
+    // per-user on shared machines, and consistent with where the
+    // Racket engine's cache already lives — before any WebView2
+    // environment is created. The loader reads this variable directly,
+    // so no projection types are needed here.
+    wchar_t local_app_data[1024];
+    if (const DWORD written = ::GetEnvironmentVariableW(
+            L"LOCALAPPDATA", local_app_data, 1024);
+        written > 0 && written < 1024) {
+      const std::wstring udf =
+          std::wstring(local_app_data, written) + L"\\threadly\\WebView2";
+      ::SetEnvironmentVariableW(L"WEBVIEW2_USER_DATA_FOLDER", udf.c_str());
+    }
     ReaderHost().Content(webview);
     ReaderHost().HorizontalContentAlignment(mx::HorizontalAlignment::Stretch);
     ReaderHost().VerticalContentAlignment(mx::VerticalAlignment::Stretch);
