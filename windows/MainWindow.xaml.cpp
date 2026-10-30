@@ -871,9 +871,12 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
     // Racket engine's cache already lives — before any WebView2
     // environment is created. The loader reads this variable directly,
     // so no projection types are needed here.
-    if (const char* local_app_data = std::getenv("LOCALAPPDATA")) {
-      const std::wstring udf = winrt::to_hstring(local_app_data) +
-                               L"\\threadly\\WebView2";
+    wchar_t local_app_data[1024];
+    if (const DWORD written = ::GetEnvironmentVariableW(
+            L"LOCALAPPDATA", local_app_data, 1024);
+        written > 0 && written < 1024) {
+      const std::wstring udf =
+          std::wstring(local_app_data, written) + L"\\threadly\\WebView2";
       ::SetEnvironmentVariableW(L"WEBVIEW2_USER_DATA_FOLDER", udf.c_str());
     }
     ReaderHost().Content(webview);
