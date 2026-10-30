@@ -48,6 +48,14 @@ and macOS virtual machines, reading live forum data end to end.
   WebView2 measures 0×0 before rendering, so pages loaded into a
   zero-sized surface. Both fixed; acceptance VM confirms rows open
   threads and the reader renders like macOS and Linux.
+- Windows (MSI install): the app crashed at startup with an access
+  violation. WebView2's default user-data folder sits beside the
+  executable — under Program Files that location is unwritable for a
+  filtered (UAC) admin token, which is what every real user's desktop
+  session runs under. The reader now points the loader's
+  `WEBVIEW2_USER_DATA_FOLDER` at `%LOCALAPPDATA%\threadly\WebView2`
+  before any WebView2 environment is created; the acceptance VM
+  confirms the installed app starts, lists topics, and reads threads.
 - Releases now publish as drafts: the real artifacts must pass an
   install-and-read acceptance pass on all three desktop platforms
   before the release is promoted to public.
