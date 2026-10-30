@@ -811,6 +811,10 @@ void MainWindow::CheckForUpdates_Click(winrt::Windows::Foundation::IInspectable 
 
 void MainWindow::SetReadyUi() {
   RetryOpenButton().Visibility(winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
+  // Rows are live: the list starts disabled in the XAML so a
+  // half-initialized shell cannot be clicked into; the first row batch
+  // (latest, category, search or notifications) re-arms it here.
+  Topics().IsEnabled(true);
   if (StatusBar().IsOpen() &&
       StatusBar().Severity() ==
           Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error) {
