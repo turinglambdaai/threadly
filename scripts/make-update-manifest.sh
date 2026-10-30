@@ -91,7 +91,10 @@ cat > "$SCRIPT" <<RKT
                    (sha256-file/hex path)
                    (file-size path)
                    installer
-                   '()))
+                   '()
+                   ;; component: #f = the whole app, one payload per
+                   ;; platform (rivet 9d766b4a added this trailing field)
+                   #f))
 
 (define manifest
   (update-manifest app-id
