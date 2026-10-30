@@ -866,14 +866,15 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
     // under Program Files that location is unwritable for a filtered
     // (UAC) admin token, and the release-VM acceptance caught the
     // result: 0xc0000005 at startup, before any of the degrade paths
-    // could run. Park the folder in %LOCALAPPDATA%, which the app can
-    // always write and which stays per-user on shared machines.
+    // could run. Point the loader at %LOCALAPPDATA% — always writable,
+    // per-user on shared machines, and consistent with where the
+    // Racket engine's cache already lives — before any WebView2
+    // environment is created. The loader reads this variable directly,
+    // so no projection types are needed here.
     if (const char* local_app_data = std::getenv("LOCALAPPDATA")) {
-      winrt::Microsoft::Web::WebView2::Core::CoreWebView2CreationProperties
-          props;
-      props.UserDataFolder(winrt::to_hstring(local_app_data) +
-                           L"\\threadly\\WebView2");
-      webview.CreationProperties(props);
+      const std::wstring udf = winrt::to_hstring(local_app_data) +
+                               L"\\threadly\\WebView2";
+      ::SetEnvironmentVariableW(L"WEBVIEW2_USER_DATA_FOLDER", udf.c_str());
     }
     ReaderHost().Content(webview);
     ReaderHost().HorizontalContentAlignment(mx::HorizontalAlignment::Stretch);
