@@ -855,7 +855,16 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
   auto const weak = get_weak();
   try {
     winrt::Microsoft::UI::Xaml::Controls::WebView2 webview;
+    // WinUI 3 dropped UWP's Stretch default for ContentControl content
+    // alignment, and a WebView2 desires 0x0 until it renders — so the
+    // unchecked control measures 0x0 inside the reader pane: engine up,
+    // page loaded, permanently white surface. Pin every alignment to
+    // Stretch so the reader fills its pane.
+    webview.HorizontalAlignment(mx::HorizontalAlignment::Stretch);
+    webview.VerticalAlignment(mx::VerticalAlignment::Stretch);
     ReaderHost().Content(webview);
+    ReaderHost().HorizontalContentAlignment(mx::HorizontalAlignment::Stretch);
+    ReaderHost().VerticalContentAlignment(mx::VerticalAlignment::Stretch);
     co_await webview.EnsureCoreWebView2Async();
     if (auto window = weak.get()) {
       window->reader_ = webview;
