@@ -40,7 +40,7 @@ for artifact in "$DIST/threadly-$VERSION-macos-arm64.zip" \
 done
 [[ -f "$KEY" ]] || { echo "error: missing signing key $KEY (see scripts/update-keys.sh)" >&2; exit 1; }
 
-BASE_URL="${RELEASE_ASSET_BASE_URL:-https://github.com/turinglambdaai/threadly/releases/download/$TAG}"
+BASE_URL="${RELEASE_ASSET_BASE_URL:-https://github.com/turlamai/threadly/releases/download/$TAG}"
 
 # Ed25519 needs OpenSSL 3+ (macOS ships LibreSSL, which cannot do it).
 OPENSSL_BIN="${OPENSSL_BIN:-}"
@@ -62,7 +62,22 @@ fi
 
 SCRIPT="$(mktemp "${TMPDIR:-/tmp}/threadly-manifest-XXXXXX.rkt")"
 KEY_DER="$(mktemp "${TMPDIR:-/tmp}/threadly-key-XXXXXX.der")"
-trap 'rm -f "$SCRIPT" "$KEY_DER"' EXIT
+PUB_DER="$(mktemp "${TMPDIR:-/tmp}/threadly-public-XXXXXX.der")"
+trap 'rm -f "$SCRIPT" "$KEY_DER" "$PUB_DER"' EXIT
+
+# Refuse a syntactically valid signature from a key that installed clients
+# do not trust. Ed25519 SPKI is 12-byte prefix + 32-byte raw public key.
+"$OPENSSL_BIN" pkey -in "$KEY" -pubout -outform DER -out "$PUB_DER"
+[[ "$(wc -c < "$PUB_DER")" -eq 44 ]] || {
+  echo "error: signing key is not an Ed25519 key" >&2; exit 1; }
+PUBLIC_B64="$(tail -c 32 "$PUB_DER" | base64 | tr -d '\r\n')"
+EXPECTED_RACKET="$(sed -n 's/^(define current-update-public-key "\([^"]*\)".*/\1/p' "$ROOT/app/update.rkt")"
+EXPECTED_SWIFT="$(sed -n 's/^[[:space:]]*static let publicKeyBase64 = "\([^"]*\)".*/\1/p' "$ROOT/macos-host/Sources/RivetHost/UpdateService.swift")"
+if [[ -z "$EXPECTED_RACKET" || -z "$EXPECTED_SWIFT" ||
+      "$PUBLIC_B64" != "$EXPECTED_RACKET" || "$PUBLIC_B64" != "$EXPECTED_SWIFT" ]]; then
+  echo "error: signing key does not match embedded Racket and macOS Ed25519 public keys" >&2
+  exit 1
+fi
 
 # rivet's signer reads DER (OneAsymmetricKey); convert the PEM once here.
 "$OPENSSL_BIN" pkey -in "$KEY" -outform DER -out "$KEY_DER"

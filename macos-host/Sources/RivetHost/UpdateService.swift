@@ -24,8 +24,8 @@ struct UpdateService {
     static let expectedKeyID = "threadly-2026-10"
 
     static let manifestURL = URL(string:
-        "https://github.com/turinglambdaai/threadly/releases/latest/download/update-manifest.json")!
-    static let releasesPage = "https://github.com/turinglambdaai/threadly/releases/latest"
+        "https://github.com/turlamai/threadly/releases/latest/download/update-manifest.json")!
+    static let releasesPage = "https://github.com/turlamai/threadly/releases/latest"
     static let throttleSeconds: TimeInterval = 4 * 60 * 60
 
     public enum UpdateError: LocalizedError {

@@ -12,7 +12,7 @@ Free community reader in maintenance mode under AGPL-3.0. No commercial account 
 
 Desktop maintenance scope: macOS, Windows and Linux. Mobile and watch clients are not current deliveries.
 
-Use [official Releases](https://github.com/turinglambdaai/threadly/releases), select an explicitly listed OS/architecture asset, read its release notes and check supplied checksums. An absent asset/platform is not a delivery promise. Preview builds may lack publisher signing or notarization; do not disable system-wide security protections to install them.
+Use [official Releases](https://github.com/turlamai/threadly/releases), select an explicitly listed OS/architecture asset, read its release notes and check supplied checksums. An absent asset/platform is not a delivery promise. Current macOS packages are ad-hoc signed, **not** Developer ID signed or notarized. Windows MSI/portable ZIP packages are unsigned; SmartScreen may warn. Linux packages do not require a paid developer account. Do not disable system-wide security protections to install a package. In-app updates require an Ed25519-signed manifest and a matching artifact hash.
 
 ## Your first successful session
 
@@ -38,7 +38,7 @@ Back up data and read the destination release notes first. An in-app update chec
 
 ## Get help
 
-Report problems in [GitHub Issues](https://github.com/turinglambdaai/threadly/issues), in English or Chinese. Include the version, OS/architecture, installation channel, steps, expected result and actual result. Reproduce with synthetic input first; do not attach keys, credentials, databases, private source documents or complete logs. Public support has no guaranteed response time.
+Report problems in [GitHub Issues](https://github.com/turlamai/threadly/issues), in English or Chinese. Include the version, OS/architecture, installation channel, steps, expected result and actual result. Reproduce with synthetic input first; do not attach keys, credentials, databases, private source documents or complete logs. Public support has no guaranteed response time.
 
 ## Further reading
 

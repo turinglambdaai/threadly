@@ -80,7 +80,7 @@
 (define current-update-key-id "threadly-2026-10")
 (define current-update-application-id "site.jrtx.threadly")
 
-(define releases-page "https://github.com/turinglambdaai/threadly/releases/latest")
+(define releases-page "https://github.com/turlamai/threadly/releases/latest")
 
 ;; The moving "latest" location; fetch-update-manifest follows the release
 ;; asset's 302 to the CDN internally (rivet#153). The parameter is a test
@@ -93,7 +93,7 @@
   (define base (current-update-base-url))
   (if base
       (string-append (string-trim base "/" #:right? #t) "/update-manifest.json")
-      "https://github.com/turinglambdaai/threadly/releases/latest/download/update-manifest.json"))
+      "https://github.com/turlamai/threadly/releases/latest/download/update-manifest.json"))
 
 (define maximum-download-bytes (* 800 1024 1024))
 

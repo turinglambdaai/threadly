@@ -221,19 +221,34 @@ jobs:
              artifacts/linux-x64/* artifacts/linux-arm64/* dist/
           # The portable zips (macOS/Windows) and the tar.gz (Linux) are the
           # update feed, assembled and signed by make-update-manifest.sh.
-          # Missing secret → warn and publish without a manifest.
-          if [[ -n "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
-            KEY_PEM="$RUNNER_TEMP/update-signing-key.pem"
-            printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_PEM"
-            bash scripts/make-update-manifest.sh "$GITHUB_REF_NAME" dist "$KEY_PEM"
-          else
-            echo "::warning::UPDATE_ED25519_PRIVATE_KEY not set — release ships without an update manifest"
+          # The updater trusts only Ed25519-signed manifests. Never create
+          # even a draft release whose feed cannot be verified by clients.
+          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
+            echo "::error::UPDATE_ED25519_PRIVATE_KEY is required; refusing to publish without a signed update manifest"
+            exit 1
           fi
+          umask 077
+          KEY_PEM="$RUNNER_TEMP/update-signing-key.pem"
+          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_PEM"
+          bash scripts/make-update-manifest.sh "$GITHUB_REF_NAME" dist "$KEY_PEM"
+          test -s dist/update-manifest.json || {
+            echo "::error::Signed update-manifest.json was not generated"
+            exit 1
+          }
+          rm -f "$KEY_PEM"
           awk -v header="## ${VERSION}" '
             index($0, header) == 1 {on=1; next}
             on && /^## / {exit}
             on {print}
           ' CHANGELOG.md > /tmp/notes.md
+          cat >> /tmp/notes.md <<'SIGNING_STATUS'
+
+          ### Package signing and updates
+          - macOS: ad-hoc development signing only. These packages are **not** Developer ID signed or Apple notarized; Gatekeeper may warn.
+          - Windows: MSI and portable ZIP are unsigned. Windows SmartScreen may warn; Authenticode is not configured.
+          - Linux: native packages require no paid publisher account.
+          - In-app update metadata is Ed25519 signed; clients must verify the signature and downloaded payload digest.
+          SIGNING_STATUS
           cd dist
           for f in *.sha256; do [ -s "$f" ] || rm -f "$f"; done
           cat *.sha256 > SHA256SUMS
