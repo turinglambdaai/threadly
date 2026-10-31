@@ -243,12 +243,12 @@ jobs:
           ' CHANGELOG.md > /tmp/notes.md
           cat >> /tmp/notes.md <<'SIGNING_STATUS'
 
-### Package signing and updates
-- macOS: ad-hoc development signing only. These packages are **not** Developer ID signed or Apple notarized; Gatekeeper may warn.
-- Windows: MSI and portable ZIP are unsigned. Windows SmartScreen may warn; Authenticode is not configured.
-- Linux: native packages require no paid publisher account.
-- In-app update metadata is Ed25519 signed; clients must verify the signature and downloaded payload digest.
-SIGNING_STATUS
+          ### Package signing and updates
+          - macOS: ad-hoc development signing only. These packages are **not** Developer ID signed or Apple notarized; Gatekeeper may warn.
+          - Windows: MSI and portable ZIP are unsigned. Windows SmartScreen may warn; Authenticode is not configured.
+          - Linux: native packages require no paid publisher account.
+          - In-app update metadata is Ed25519 signed; clients must verify the signature and downloaded payload digest.
+          SIGNING_STATUS
           cd dist
           for f in *.sha256; do [ -s "$f" ] || rm -f "$f"; done
           cat *.sha256 > SHA256SUMS
