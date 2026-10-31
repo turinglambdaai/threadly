@@ -44,10 +44,11 @@
 
 (test-case "embedded identity is coherent and the key is configured"
   (check-true (upd:update-configured?))
+  (check-equal? upd:releases-page "https://github.com/turlamai/threadly/releases/latest")
   (check-equal? upd:current-update-key-id "threadly-2026-10")
   (check-equal? upd:current-update-application-id "site.jrtx.threadly")
   (check-equal? (upd:manifest-url)
-                "https://github.com/turinglambdaai/threadly/releases/latest/download/update-manifest.json")
+                "https://github.com/turlamai/threadly/releases/latest/download/update-manifest.json")
   (check-equal?
    (parameterize ([upd:current-update-base-url "https://feed.test/threadly/"])
      (upd:manifest-url))
