@@ -882,8 +882,12 @@ winrt::fire_and_forget MainWindow::CreateReaderAsync() {
         written > 0 && written < 1024) {
       const std::wstring udf =
           std::wstring(local_app_data, written) + L"\\threadly\\WebView2";
-      reader_environment = co_await winrt::Microsoft::Web::WebView2::Core::
-          CoreWebView2Environment::CreateWithOptionsAsync(udf, L"");
+      reader_environment =
+          co_await winrt::Microsoft::Web::WebView2::Core::
+              CoreWebView2Environment::CreateWithOptionsAsync(
+                  L"", udf,
+                  winrt::Microsoft::Web::WebView2::Core::
+                      CoreWebView2EnvironmentOptions{});
     }
     co_await webview.EnsureCoreWebView2Async(reader_environment);
     if (auto window = weak.get()) {
