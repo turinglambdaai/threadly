@@ -52,10 +52,10 @@ and macOS virtual machines, reading live forum data end to end.
   violation. WebView2's default user-data folder sits beside the
   executable — under Program Files that location is unwritable for a
   filtered (UAC) admin token, which is what every real user's desktop
-  session runs under. The reader now points the loader's
-  `WEBVIEW2_USER_DATA_FOLDER` at `%LOCALAPPDATA%\threadly\WebView2`
-  before any WebView2 environment is created; the acceptance VM
-  confirms the installed app starts, lists topics, and reads threads.
+  session runs under. The reader now creates its WebView2 environment
+  explicitly with the folder at `%LOCALAPPDATA%\threadly\WebView2`
+  instead of the exe-adjacent default; the acceptance VM confirms the
+  installed app starts, lists topics, and reads threads.
 - Releases now publish as drafts: the real artifacts must pass an
   install-and-read acceptance pass on all three desktop platforms
   before the release is promoted to public.
