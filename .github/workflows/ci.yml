@@ -27,6 +27,10 @@ jobs:
       - name: Version preflight (VERSION == rivet.rktd == app/version.rkt)
         run: bash scripts/check-release-version.sh
         shell: bash
+      - name: Reject an untrusted release signing key (offline)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: bash scripts/test-release-signing.sh
       - name: Install Racket (CS)
         uses: Bogdanp/setup-racket@v1.15
         with:
